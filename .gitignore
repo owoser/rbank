@@ -37,3 +37,7 @@ Desktop.ini
 
 mods/
 config.local.json
+.env
+.env*
+
+docs-*/
