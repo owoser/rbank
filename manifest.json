@@ -1,7 +1,12 @@
 {
-    "name": "${modName}",
-    "entry": "${modFile}",
-    "version": "${modVersion}",
-    "type": "native",
-    "platform": "${modPlatform}"
+  "name": "rbank",
+  "entry": "rbank.dll",
+  "version": "0.1.0",
+  "type": "native",
+  "platform": "server",
+  "description": "跨服银行",
+  "author": "owoser",
+  "dependencies": [
+    {"name": "LegacyMoney", "version": "=0.23.0"}
+  ]
 }

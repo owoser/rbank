@@ -17,53 +17,20 @@
       "label": "",
       "platform": "win-x64",
       "dependencies": {
-        "github.com/LiteLDev/LeviLamina": "26.60.*"
+        "github.com/LiteLDev/LeviLamina": "26.60.*",
+        "github.com/LiteLDev/LegacyMoney": "0.23.0"
       },
       "assets": [
         {
           "type": "zip",
           "urls": [
-            "https://{{tooth}}/releases/download/v{{version}}/levilamina-mod-template-server-windows-x64.zip"
+            "https://{{tooth}}/releases/download/v{{version}}/rbank-windows-x64.zip"
           ],
           "placements": [
             {
               "type": "dir",
-              "src": "my-mod/",
-              "dest": "mods/my-mod/"
-            }
-          ]
-        }
-      ],
-      "preserve_files": [],
-      "remove_files": [],
-      "scripts": {
-        "pre_install": [],
-        "install": [],
-        "post_install": [],
-        "pre_pack": [],
-        "post_pack": [],
-        "pre_uninstall": [],
-        "uninstall": [],
-        "post_uninstall": []
-      }
-    },
-    {
-      "label": "client",
-      "platform": "win-x64",
-      "dependencies": {
-        "github.com/LiteLDev/LeviLamina#client": "26.60.*"
-      },
-      "assets": [
-        {
-          "type": "zip",
-          "urls": [
-            "https://{{tooth}}/releases/download/v{{version}}/levilamina-mod-template-client-windows-x64.zip"
-          ],
-          "placements": [
-            {
-              "type": "dir",
-              "src": "my-mod/",
-              "dest": "mods/my-mod/"
+              "src": "rbank/",
+              "dest": "mods/rbank/"
             }
           ]
         }

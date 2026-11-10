@@ -1,5 +1,6 @@
 build/
 bin/
+.tools/
 .xmake/
 *.obj
 *.o
@@ -11,7 +12,6 @@ bin/
 *.lib
 *.log
 
-.xmake/
 compile_commands.json
 config.h.in
 
