@@ -2,7 +2,7 @@
 
 使用 LeviLamina 为 MCBE 服务器开发的一个基于原版经济插件的拓展插件，实现多个服务器之间经济互通。
 
-请先阅读下方文档，了解该插件的开发需求与官方提供的文档和公开接口，有关开发环境在 `/.env-dev` 文件中提供。
+请先阅读下方文档，了解该插件的开发需求与官方提供的文档和公开接口。
 
 ## 相关文档
 
@@ -13,12 +13,9 @@
 
 ## 开发环境/工具链
 
-| 工具            | 版本         | 路径                                                         | 用途                                     |
-| :-------------- | :----------- | :----------------------------------------------------------- | :--------------------------------------- |
-| LLVM / clang-cl | 19.1.7       | `build/tools/llvm/bin/`                           | 编译器（MSVC STL 14.44 要求 Clang ≥ 19） |
-| xmake           | 3.1.2        | `build/tools/xmake/`                              | 官方构建链路，用于拉取 LeviLamina SDK    |
-| MSVC BuildTools | 14.44.35207  | `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\` | 提供 STL 头、CRT 库和 `link.exe`         |
-| Windows SDK     | 10.0.26100.0 | `C:\Program Files (x86)\Windows Kits\10\`                    |                                          |
+使用 `./scripts/prepare-tools.ps1` 检查工具链并自动下载工具。
+
+开发环境信息位于 `./.env-dev` 文件中。
 
 ## 源码格式规范
 
