@@ -70,7 +70,10 @@ struct Session : CardRepo, LotRepo, LedgerRepo, IntentRepo, NodeRepo, RateRepo, 
     virtual void   commit()                     = 0;
     virtual void   rollback() noexcept          = 0;
     virtual Amount sequence(std::string const&) = 0;
-    virtual ~Session()                          = default;
+
+    /// 仅供运维工具使用的直通执行；业务代码不得调用。
+    virtual void execute(std::string const&) = 0;
+    virtual ~Session()                       = default;
 };
 
 struct UnitOfWork {

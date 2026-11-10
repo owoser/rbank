@@ -14,11 +14,14 @@
 
 产物在 `build/rbank/`：`rbank.dll`、`manifest.json`、`schema/migrations/`、`libmariadb.dll` 及其插件目录。`-NoLink` 只编译不链接，`-CompileCommandsOnly` 生成 `compile_commands.json`。
 
-规则自检（不依赖 MC 与 MySQL）：
+测试分两级，凭据从 `.env-dev` 的 `MYSQL_*` 读入并只注入进程环境：
 
 ```powershell
-./scripts/test-local.ps1
+./scripts/test-local.ps1              # 纯规则，不碰 MC 与 MySQL
+./scripts/test-local.ps1 -Integration # 追加真实 MySQL 的完整用例
 ```
+
+集成用例会在 `MYSQL_DATABASE`（默认 `rbank_test`）里建表并清空数据，不要指向正式库。
 
 ## 部署
 

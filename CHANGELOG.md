@@ -16,4 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 并发控制：按 xuid 排序的 `GET_LOCK`、事务内 `FOR UPDATE`、银行卡乐观版本号。
 - 游玩端表单（卡片面板、存取款、开卡）、`/rbank` 命令树、可选 HTTP 管理 API。
 - 节点登记与心跳、汇率表（含生效时间）、原版经济审计表。
-- 首次启动自动建表迁移，热配置存于数据库 `config` 表。
+- 按编号的迁移目录：`schema_version` 记录已应用脚本，升级时只跑新增的部分。
+- 热配置存于数据库 `config` 表，秒级生效，无需重启。
+- 两级自检：纯规则用例，以及连真实 MySQL 的集成用例（含并发、恢复、幂等、限额）。

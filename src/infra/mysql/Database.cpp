@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <fstream>
 #include <random>
+#include <set>
 #include <sstream>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -134,6 +135,7 @@ public:
     void   commit() override;
     void   rollback() noexcept override;
     Amount sequence(std::string const&) override;
+    void   execute(std::string const&) override;
 
     std::optional<Card> card(std::string const&) override;
     std::vector<Card>   cards(std::string const&) override;
@@ -380,9 +382,11 @@ void MysqlSession::consumeLot(std::string const& id, Amount amount) {
 }
 
 void MysqlSession::appendLedger(LedgerEntry const& l) {
-    sql("INSERT INTO ledger VALUES(" + quote(l.id) + "," + quote(l.xuid) + "," + quote(l.card) + "," + quote(l.kind)
-        + "," + num(l.delta) + "," + num(l.fee) + "," + num(l.balance) + "," + num(l.rate) + "," + num(l.local) + ","
-        + quote(l.server) + "," + quote(l.peer) + "," + quote(l.intent) + "," + num(l.created) + ")");
+    sql("INSERT INTO ledger(id,xuid,card_no,kind,delta_base,fee_base,balance_after,rate,local_amount,server_id,"
+        "peer_xuid,intent_id,created_at) VALUES("
+        + quote(l.id) + "," + quote(l.xuid) + "," + quote(l.card) + "," + quote(l.kind) + "," + num(l.delta) + ","
+        + num(l.fee) + "," + num(l.balance) + "," + num(l.rate) + "," + num(l.local) + "," + quote(l.server) + ","
+        + quote(l.peer) + "," + quote(l.intent) + "," + num(l.created) + ")");
 }
 
 std::vector<LedgerEntry> MysqlSession::history(std::string const& xuid, int count) {
@@ -390,7 +394,7 @@ std::vector<LedgerEntry> MysqlSession::history(std::string const& xuid, int coun
     for (auto const& r :
          sql("SELECT id,xuid,card_no,kind,delta_base,fee_base,balance_after,rate,local_amount,server_id,peer_xuid,"
              "intent_id,created_at FROM ledger WHERE xuid="
-             + quote(xuid) + " ORDER BY created_at DESC,id DESC LIMIT " + num(std::clamp(count, 1, 100)))) {
+             + quote(xuid) + " ORDER BY seq DESC LIMIT " + num(std::clamp(count, 1, 100)))) {
         LedgerEntry entry;
         entry.id      = r[0];
         entry.xuid    = r[1];
@@ -536,6 +540,8 @@ void MysqlSession::appendAudit(AuditRecord const& a) {
         + ")");
 }
 
+void MysqlSession::execute(std::string const& statement) { sql(statement); }
+
 Amount MysqlSession::sequence(std::string const& key) {
     sql("INSERT INTO card_gen_seq(k,v) VALUES(" + quote(key) + ",1) ON DUPLICATE KEY UPDATE v=v+1");
     auto rows = sql("SELECT v FROM card_gen_seq WHERE k=" + quote(key) + " FOR UPDATE");
@@ -543,20 +549,48 @@ Amount MysqlSession::sequence(std::string const& key) {
     return integer(rows[0][0]);
 }
 
-void MysqlSession::migrate(std::filesystem::path const& path) {
+void MysqlSession::migrate(std::filesystem::path const& directory) {
     auto lock = sql("SELECT GET_LOCK('rbank:migration',10)");
     require(!lock.empty() && lock[0][0] == "1", "BUSY", "迁移锁繁忙");
 
     try {
-        std::ifstream in(path);
-        require(in.good(), "MIGRATION", "迁移脚本缺失: " + path.string());
-        std::stringstream text;
-        text << in.rdbuf();
-        std::string statement;
-        while (std::getline(text, statement, ';')) {
-            if (statement.find_first_not_of(" \r\n\t") != std::string::npos) {
-                sql(statement);
+        // 版本表先于任何脚本存在：它是「哪些脚本已跑过」的唯一记录。
+        sql("CREATE TABLE IF NOT EXISTS schema_version ("
+            "version INT PRIMARY KEY, applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
+
+        std::vector<std::pair<int, std::filesystem::path>> scripts;
+        require(std::filesystem::is_directory(directory), "MIGRATION", "迁移目录缺失: " + directory.string());
+        for (auto const& entry : std::filesystem::directory_iterator(directory)) {
+            auto name      = entry.path().filename().string();
+            auto version   = 0;
+            auto [ptr, ec] = std::from_chars(name.data(), name.data() + name.size(), version);
+            if (ec == std::errc{} && entry.path().extension() == ".sql") {
+                scripts.emplace_back(version, entry.path());
             }
+        }
+        std::sort(scripts.begin(), scripts.end(), [](auto const& a, auto const& b) { return a.first < b.first; });
+
+        std::set<int> applied;
+        for (auto const& row : sql("SELECT version FROM schema_version")) {
+            applied.insert(static_cast<int>(integer(row[0])));
+        }
+
+        for (auto const& [version, path] : scripts) {
+            if (applied.contains(version)) {
+                continue;
+            }
+
+            std::ifstream in(path);
+            require(in.good(), "MIGRATION", "迁移脚本缺失: " + path.string());
+            std::stringstream text;
+            text << in.rdbuf();
+            std::string statement;
+            while (std::getline(text, statement, ';')) {
+                if (statement.find_first_not_of(" \r\n\t") != std::string::npos) {
+                    sql(statement);
+                }
+            }
+            sql("INSERT INTO schema_version(version) VALUES(" + num(version) + ")");
         }
 
         sql("SELECT RELEASE_LOCK('rbank:migration')");
@@ -600,6 +634,8 @@ void* Database::acquire() {
     ++count;
     lock.unlock();
 
+    std::string detail = "无法创建数据库连接句柄";
+
     auto connection = api->init(nullptr);
     if (connection) {
         api->options(connection, 0, &cfg.timeout);
@@ -634,15 +670,28 @@ void* Database::acquire() {
                 return connection;
             }
         }
+
+        // 保留驱动原文：证书、权限、网络问题都只能从这里看出来。
+        detail = api->errorMessage(connection) ? api->errorMessage(connection) : "未知错误";
         api->close(connection);
     }
 
     // 连接失败：归还名额并熔断 5 秒，让银行域操作快速失败。
-    circuitUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    --count;
+    {
+        std::lock_guard guard(mutex);
+        lastError    = detail;
+        circuitUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        --count;
+    }
     available.notify_one();
 
-    throw Failure("UNAVAILABLE", "银行数据库不可用");
+    throw Failure("UNAVAILABLE", "银行数据库不可用: " + detail);
+}
+
+std::string Database::reason() const {
+    std::lock_guard lock(mutex);
+
+    return lastError;
 }
 
 void Database::release(void* connection, bool broken) {
@@ -666,9 +715,9 @@ std::unique_ptr<Session> Database::open(std::vector<std::string> xuids) {
     return std::make_unique<MysqlSession>(*this, std::move(xuids));
 }
 
-void Database::migrate(std::filesystem::path const& script) {
+void Database::migrate(std::filesystem::path const& directory) {
     MysqlSession session(*this, {});
-    session.migrate(script);
+    session.migrate(directory);
 }
 
 } // namespace rbank::infra

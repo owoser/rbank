@@ -114,4 +114,3 @@ CREATE TABLE IF NOT EXISTS card_gen_seq (
     v BIGINT      NOT NULL
 ) ENGINE=InnoDB;
 
-INSERT IGNORE INTO schema_version (version) VALUES (1);

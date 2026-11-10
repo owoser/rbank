@@ -31,11 +31,12 @@ private:
     DatabaseConfig       cfg;
     std::shared_ptr<Api> api;
 
-    std::mutex                            mutex;
+    mutable std::mutex                    mutex;
     std::condition_variable               available;
     std::vector<void*>                    idle;
     size_t                                count = 0;
     std::chrono::steady_clock::time_point circuitUntil;
+    std::string                           lastError;
 
 public:
     void* acquire();
@@ -43,13 +44,16 @@ public:
 
     std::shared_ptr<Api> const& client() const { return api; }
 
+    /// 最近一次建连失败的原因，供启动日志与运维排查。
+    std::string reason() const;
+
     explicit Database(DatabaseConfig);
     ~Database() override;
 
     std::unique_ptr<core::Session> open(std::vector<std::string> xuids = {}) override;
 
-    /// 建表迁移：在独占连接上持迁移锁执行 schema 脚本。
-    void migrate(std::filesystem::path const& script);
+    /// 建表迁移：在独占连接上持迁移锁，按编号执行目录中尚未应用过的脚本。
+    void migrate(std::filesystem::path const& directory);
 };
 
 } // namespace rbank::infra

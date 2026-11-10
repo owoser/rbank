@@ -40,7 +40,7 @@ void Plugin::start() {
     auto self = ll::mod::NativeMod::current();
     app       = std::make_shared<Application>(
         *config,
-        self->getModDir() / "schema/migrations/001_bank.sql",
+        self->getModDir() / "schema/migrations",
         [self](std::string const& message) { self->getLogger().warn("rbank: {}", message); }
     );
     auditBridge.store(app);
