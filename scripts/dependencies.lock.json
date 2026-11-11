@@ -1,0 +1,179 @@
+[
+  {
+    "url": "https://codeload.github.com/LiteLDev/LeviLamina/zip/v26.60.5",
+    "includes": [
+      "src",
+      "src-server"
+    ],
+    "sha256": "a809a12dc9636a4c461d7267049f33e08d001784032097749704d805a34801e7",
+    "id": "levilamina",
+    "probe": "src-server/ll/api/service/TargetedBedrock.h"
+  },
+  {
+    "url": "https://codeload.github.com/fmtlib/fmt/zip/11.2.0",
+    "includes": [
+      "include"
+    ],
+    "sha256": "ebb31f63e14048ffba9200bbe27b339ec50226cbe8e96ca8b62ee16a0a4fb1af",
+    "id": "fmt",
+    "probe": "include/fmt/format.h"
+  },
+  {
+    "url": "https://codeload.github.com/skypjack/entt/zip/v4.0.0",
+    "includes": [
+      "src"
+    ],
+    "sha256": "6cae22c98a6a463b4152c65bfc3593cfaf6fda60b9bb65771d0752365af4fe83",
+    "id": "entt",
+    "probe": "src/entt/entt.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/martinmoene/expected-lite/zip/f339d2f73730f8fee4412f5e4938717866ecef48",
+    "includes": [
+      "include"
+    ],
+    "sha256": "0c0fe8296fc9fa322895c54cfc797115e67271e46f3a6132c45eda67078b13e0",
+    "id": "expected-lite",
+    "probe": "include/nonstd/expected.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/microsoft/GSL/zip/v4.2.0",
+    "includes": [
+      "include"
+    ],
+    "sha256": "f694e7b0f3debc0c55fe138efb5dd9f5c402989c0dc04e8a74afc9c155cb66b9",
+    "id": "gsl",
+    "probe": "include/gsl/gsl"
+  },
+  {
+    "url": "https://codeload.github.com/g-truc/glm/zip/1.0.1",
+    "includes": [
+      "."
+    ],
+    "sha256": "09c5716296787e1f7fcb87b1cbdbf26814ec1288ed6259ccd30d5d9795809fa5",
+    "id": "glm",
+    "probe": "glm/glm.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/google/leveldb/zip/1.23",
+    "includes": [
+      "include"
+    ],
+    "sha256": "a6fa7eebd11de709c46bf1501600ed98bf95439d6967963606cc964931ce906f",
+    "id": "leveldb",
+    "probe": "include/leveldb/db.h"
+  },
+  {
+    "url": "https://codeload.github.com/Neargye/magic_enum/zip/v0.9.7",
+    "includes": [
+      "include"
+    ],
+    "sha256": "e293afdaf4d5918bc145903bccff06d28b3ed437f1ac8414ace9e8a769a9e470",
+    "id": "magic-enum",
+    "probe": "include/magic_enum/magic_enum.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/nlohmann/json/zip/v3.12.0",
+    "includes": [
+      "include"
+    ],
+    "sha256": "34660b5e9a407195d55e8da705ed26cc6d175ce5a6b1fb957e701fb4d5b04022",
+    "id": "json",
+    "probe": "include/nlohmann/json.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/Tencent/rapidjson/zip/24b5e7a8b27f42fa16b96fc70aade9106cf7102f",
+    "includes": [
+      "include"
+    ],
+    "sha256": "df07f5ddfebbc2940181039f6c939ec2764a7303ef79b17958d9792a364306bb",
+    "id": "rapidjson",
+    "probe": "include/rapidjson/document.h"
+  },
+  {
+    "url": "https://codeload.github.com/foonathan/type_safe/zip/v0.2.4",
+    "includes": [
+      "include"
+    ],
+    "sha256": "0008bdd8a0d6c80efa043a357db057ac9b739b4704eec6638a1ef06d02d70862",
+    "id": "type-safe",
+    "probe": "include/type_safe/strong_typedef.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/foonathan/debug_assert/zip/v1.3.4",
+    "includes": [
+      "."
+    ],
+    "sha256": "e29925b1b51e10b46e8c4f3d57a86db6a7ebc7cdec53fe30c1b0ca22ef845f43",
+    "id": "debug-assert",
+    "probe": "debug_assert.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/imneme/pcg-cpp/zip/428802d1a5634f96bcd0705fab379ff0113bcf13",
+    "includes": [
+      "include"
+    ],
+    "sha256": "a2a92ebb20e4562e69c996bfd67fac5c170afc8681dbab4f20a1b1ba337cbc6b",
+    "id": "pcg",
+    "probe": "include/pcg_random.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/boostorg/pfr/zip/294a4976bd04829dd204aaf9e9fd30338a5d3199",
+    "includes": [
+      "include"
+    ],
+    "sha256": "e1bcab63d94d482d883f430091f26348511d036dc67e395b1e0691021f56d118",
+    "id": "pfr",
+    "probe": "include/boost/pfr.hpp"
+  },
+  {
+    "url": "https://codeload.github.com/greg7mdp/parallel-hashmap/zip/v2.0.0",
+    "includes": [
+      "."
+    ],
+    "sha256": "ce180651b0d5eedcc0b27920bb80f2068a73bf2795a5e4249b745047a2930eb7",
+    "id": "parallel-hashmap",
+    "probe": "parallel_hashmap/phmap.h"
+  },
+  {
+    "url": "https://codeload.github.com/cameron314/concurrentqueue/zip/v1.0.4",
+    "includes": [
+      "."
+    ],
+    "sha256": "6874cb028c27bf0d00ebdb3784c65e0aae004f9ad287301708aa9d8b836be57a",
+    "id": "concurrentqueue",
+    "probe": "concurrentqueue.h"
+  },
+  {
+    "url": "https://codeload.github.com/nothings/stb/zip/f0569113c93ad095470c54bf34a17b36646bbbb5",
+    "includes": [
+      "."
+    ],
+    "sha256": "b62be3009cb9d4b6385bd4854bddf72d8e91f4e19d1347d6cf9589b19f70d45d",
+    "id": "stb",
+    "probe": "stb_truetype.h"
+  },
+  {
+    "url": "https://codeload.github.com/LiteLDev/SymbolProvider/zip/v1.3.0",
+    "includes": [],
+    "sha256": "cfc7375c995998887bd71dbd491518e3f6381edb6e4ffeca719f6d77ce12c1da",
+    "id": "symbolprovider",
+    "probe": "src/SymbolProvider.cpp"
+  },
+  {
+    "url": "https://codeload.github.com/yhirose/cpp-httplib/zip/v0.28.0",
+    "includes": [
+      "."
+    ],
+    "sha256": "7f60ac8599abf8193eaad4be09f17116b8930dcbe84a42ca7e2c302db1354c42",
+    "id": "httplib",
+    "probe": "httplib.h"
+  },
+  {
+    "url": "https://codeload.github.com/LiteLDev/LeviBuildScript/zip/6f926372573acbf50bad24755c1bdb067b36938e",
+    "includes": [],
+    "sha256": "4675d9e018f6a363facd604ecea3f4c41c87a7f6f5c9c9ed52150eb49060bfd7",
+    "id": "levibuildscript",
+    "probe": "rules/linkrule.lua"
+  }
+]

@@ -9,6 +9,8 @@ $sdkRoot = 'C:\Program Files (x86)\Windows Kits\10'
 $sdk = '10.0.26100.0'
 $clang = Join-Path $project '.tools/llvm/bin/clang-cl.exe'
 $deps = Join-Path $project 'build/deps'
+& (Join-Path $PSScriptRoot 'prepare-deps.ps1') -Check
+if (-not (Test-Path -LiteralPath $clang)) { throw "Compiler is missing: $clang. Run ./scripts/prepare-tools.ps1." }
 $includeDirs = @(
     "$deps/levilamina/src",
     "$deps/levilamina/src-server",

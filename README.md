@@ -6,11 +6,20 @@
 
 ## 构建
 
-依赖放在 `build/deps`（LeviLamina 头文件与导入库、prelink、bedrock runtime 数据、libmariadb）。工具链由 `./scripts/prepare-tools.ps1` 下载到 `.tools`。
+新检出先准备一次环境，两个脚本都按锁定版本下载并校验 SHA256：
+
+```powershell
+./scripts/prepare-tools.ps1   # 工具链 → .tools（xmake、LLVM、7-Zip）
+./scripts/prepare-deps.ps1    # 依赖 → build/deps（LeviLamina、prelink、bedrock runtime 数据、libmariadb、各头文件库）
+```
+
+依赖清单在 `scripts/dependencies.lock.json`，每个条目带 URL 与 SHA256；导入库（`fmt.lib`、`SymbolProvider.lib`、`LeviLamina.lib`）在本地按当前工具链编译，工具链变了会自动重建。`prepare-deps.ps1 -Check` 只校验不下载。
 
 ```powershell
 ./scripts/build-local.ps1
 ```
+
+`build-local.ps1` 与 `test-local.ps1` 开跑前都会调 `prepare-deps.ps1 -Check`，依赖缺失或与锁不一致时直接报出缺哪些，而不是让编译在头文件处报错。
 
 产物在 `build/rbank/`：`rbank.dll`、`manifest.json`、`schema/migrations/`、`libmariadb.dll` 及其插件目录。`-NoLink` 只编译不链接，`-CompileCommandsOnly` 生成 `compile_commands.json`。
 

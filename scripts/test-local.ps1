@@ -31,6 +31,8 @@ $includes = @('/Isrc', "/I$deps/json/include") + @($systemIncludes | ForEach-Obj
 
 Push-Location $project
 try {
+    & (Join-Path $PSScriptRoot 'prepare-deps.ps1') -Check
+    if (-not (Test-Path -LiteralPath $clang)) { throw "Compiler is missing: $clang. Run ./scripts/prepare-tools.ps1." }
     New-Item -ItemType Directory -Force build/test | Out-Null
     & $clang @flags @includes tests/selftest.cpp src/bootstrap/config/Config.cpp src/infra/cardgen/CardGenerator.cpp `
         /Febuild/test/selftest.exe /link bcrypt.lib

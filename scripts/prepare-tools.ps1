@@ -18,6 +18,7 @@ $ProgressPreference = 'SilentlyContinue'
 if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitProcess) { throw 'Run Windows x64 PowerShell 5.1 or newer.' }
 . (Join-Path $PSScriptRoot 'tool-environment.ps1')
 $project = Split-Path -Parent $PSScriptRoot
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $toolsRoot = [IO.Path]::GetFullPath((Join-Path $project '.tools'))
 $vsRoots = @(Get-RbankVisualStudioRoots)
 $msvc = Find-RbankMsvc $vsRoots
