@@ -26,7 +26,7 @@ struct HttpConfig {
 
 /// config/config.json：只在启动时读取，修改需重启。
 struct StartupConfig {
-    core::Node node{"server-a", "服务器 A", "金币"};
+    core::Node node{"server-a", "Server A", "Coin"};
     struct {
         std::string host = "127.0.0.1", user = "rbank", password, database = "rbank", library = "libmariadb.dll",
                     caFile;

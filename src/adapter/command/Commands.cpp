@@ -60,7 +60,7 @@ Player* player(CommandOrigin const& origin) {
 
 bool operator_(CommandOrigin const& origin, CommandOutput& output) {
     if (origin.getPermissionsLevel() < CommandPermissionLevel::GameDirectors) {
-        output.error("需要 OP 权限");
+        output.error(translate("Operator permission is required", origin.getLocaleCode()));
 
         return false;
     }
@@ -77,23 +77,23 @@ void dispatch(
 ) {
     auto app = weak.lock();
     if (!app || !app->alive()) {
-        output.error("银行维护中");
+        output.error(translate("Bank is under maintenance", origin.getLocaleCode()));
         return;
     }
 
     auto user = player(origin);
     auto xuid = user ? user->getXuid() : std::string{};
     auto ok   = app->submit(std::move(task), [xuid](Result result) {
-        auto text = render(result);
         if (xuid.empty()) {
-            ll::mod::NativeMod::current()->getLogger().info("{}", text);
+            ll::mod::NativeMod::current()->getLogger().info("{}", render(result));
+
             return;
         }
 
-        playerByXuid(xuid, [&](Player& p) { p.sendMessage(text); });
+        playerByXuid(xuid, [&](Player& p) { p.sendMessage(render(result, p.getLocaleCode())); });
     });
     if (!ok) {
-        output.error("银行繁忙，请稍后重试");
+        output.error(translate("Bank is busy, try again later", origin.getLocaleCode()));
     }
 }
 
@@ -109,8 +109,11 @@ void forBoth(Fn&& fn) {
 void registerCommands(std::shared_ptr<Application> const& app) {
     std::weak_ptr weak = app;
 
-    auto& command = ll::command::CommandRegistrar::getInstance(false)
-                        .getOrCreateCommand("rbank", "跨服银行", CommandPermissionLevel::Any);
+    auto& command = ll::command::CommandRegistrar::getInstance(false).getOrCreateCommand(
+        "rbank",
+        translate("cross-server bank", ll::i18n::getDefaultLocaleCode()),
+        CommandPermissionLevel::Any
+    );
 
     command.overload().execute([weak](CommandOrigin const& origin, CommandOutput& output) {
         auto user = player(origin);
@@ -122,14 +125,14 @@ void registerCommands(std::shared_ptr<Application> const& app) {
         if (auto app = weak.lock(); app && app->alive()) {
             showCards(app, *user);
         } else {
-            output.error("银行维护中");
+            output.error(translate("Bank is under maintenance", origin.getLocaleCode()));
         }
     });
 
     command.overload().text("create").execute([weak](CommandOrigin const& origin, CommandOutput& output) {
         auto user = player(origin);
         if (!user) {
-            output.error("需要玩家执行");
+            output.error(translate("Must be run by a player", origin.getLocaleCode()));
             return;
         }
 
@@ -138,22 +141,21 @@ void registerCommands(std::shared_ptr<Application> const& app) {
     });
 
     for (auto action : {"list", "hist", "slot"}) {
-        command.overload().text(action).execute(
-            [weak, action = std::string(action)](CommandOrigin const& origin, CommandOutput& output) {
-                auto user = player(origin);
-                if (!user) {
-                    output.error("需要玩家执行，控制台请指定 XUID");
-                    return;
-                }
-
-                auto xuid = user->getXuid();
-                dispatch(weak, origin, output, [xuid, action](Bank& bank) {
-                    return action == "list" ? bank.list(xuid)
-                         : action == "hist" ? bank.history(xuid)
-                                            : bank.slots(xuid);
-                });
+        command.overload().text(action).execute([weak, action = std::string(action)](
+                                                    CommandOrigin const& origin,
+                                                    CommandOutput&       output
+                                                ) {
+            auto user = player(origin);
+            if (!user) {
+                output.error(translate("Must be run by a player; console must pass an XUID", origin.getLocaleCode()));
+                return;
             }
-        );
+
+            auto xuid = user->getXuid();
+            dispatch(weak, origin, output, [xuid, action](Bank& bank) {
+                return action == "list" ? bank.list(xuid) : action == "hist" ? bank.history(xuid) : bank.slots(xuid);
+            });
+        });
     }
 
     forBoth([&]<class T>() {
@@ -164,7 +166,7 @@ void registerCommands(std::shared_ptr<Application> const& app) {
                      std::string(action)](CommandOrigin const& origin, CommandOutput& output, CardParam<T> const& p) {
                     auto user = player(origin);
                     if (!user) {
-                        output.error("需要玩家执行");
+                        output.error(translate("Must be run by a player", origin.getLocaleCode()));
                         return;
                     }
 
@@ -183,7 +185,7 @@ void registerCommands(std::shared_ptr<Application> const& app) {
                      std::string(action)](CommandOrigin const& origin, CommandOutput& output, AmountParam<T> const& p) {
                     auto user = player(origin);
                     if (!user) {
-                        output.error("需要玩家执行");
+                        output.error(translate("Must be run by a player", origin.getLocaleCode()));
                         return;
                     }
 
@@ -193,7 +195,7 @@ void registerCommands(std::shared_ptr<Application> const& app) {
                             return action == "deposit" ? bank.deposit(request) : bank.withdraw(request);
                         });
                     } catch (Failure const& e) {
-                        output.error(e.what());
+                        output.error(translate(e.detail, origin.getLocaleCode()));
                     }
                 }
             );
@@ -224,7 +226,7 @@ void registerCommands(std::shared_ptr<Application> const& app) {
                 .execute([weak](CommandOrigin const& origin, CommandOutput& output, PayParam<T, R> const& p) {
                     auto user = player(origin);
                     if (!user) {
-                        output.error("需要玩家执行");
+                        output.error(translate("Must be run by a player", origin.getLocaleCode()));
                         return;
                     }
 
@@ -237,7 +239,7 @@ void registerCommands(std::shared_ptr<Application> const& app) {
                         PayRequest request{user->getXuid(), p.card, recipient, amount(p.amount), {}};
                         dispatch(weak, origin, output, [request](Bank& bank) { return bank.pay(request); });
                     } catch (Failure const& e) {
-                        output.error(e.what());
+                        output.error(translate(e.detail, origin.getLocaleCode()));
                     }
                 });
         });
@@ -261,7 +263,7 @@ void registerCommands(std::shared_ptr<Application> const& app) {
                         return bank.setRate(server, value, by);
                     });
                 } catch (Failure const& e) {
-                    output.error(e.what());
+                    output.error(translate(e.detail, origin.getLocaleCode()));
                 }
             }
         );
@@ -274,14 +276,14 @@ void registerCommands(std::shared_ptr<Application> const& app) {
                 return;
             }
             if (p.count < 1 || p.count > 100) {
-                output.error("卡槽必须在 1–100 之间");
+                output.error(translate("Slot limit must be between 1 and 100", origin.getLocaleCode()));
                 return;
             }
 
             auto by = player(origin) ? player(origin)->getXuid() : std::string("console");
             dispatch(weak, origin, output, [weak, count = p.count, by](Bank&) {
                 auto app = weak.lock();
-                require(app != nullptr, "UNAVAILABLE", "银行维护中");
+                require(app != nullptr, "UNAVAILABLE", "Bank is under maintenance");
 
                 auto session = app->store().open();
                 auto config  = session->config();

@@ -6,6 +6,7 @@
 #include "ll/api/event/EventBus.h"
 #include "ll/api/event/command/ServerCommandRegisterEvent.h"
 #include "ll/api/event/player/PlayerJoinEvent.h"
+#include "ll/api/i18n/I18n.h"
 #include "ll/api/mod/RegisterHelper.h"
 #include "ll/api/service/Bedrock.h"
 
@@ -55,10 +56,18 @@ void Plugin::start() {
 
 bool Plugin::load() {
     try {
+        if (auto loaded = ll::i18n::getInstance().load(self().getLangDir()); !loaded) {
+            self().getLogger().warn("rbank: languages failed to load, falling back to built-in text");
+            loaded.error().log(self().getLogger());
+        }
+
         config    = StartupConfig{};
         auto path = self().getConfigDir() / "config.json";
         if (!loadConfig(path, *config)) {
-            self().getLogger().error("rbank: 已生成 {}，请填写数据库与节点身份后重启", path.string());
+            self().getLogger().error(
+                "rbank: wrote {}; fill in database and node identity, then restart",
+                path.string()
+            );
 
             return false;
         }
@@ -105,7 +114,10 @@ bool Plugin::enable() {
             })
         );
 
-        self().getLogger().info("rbank 已启用，节点 {}，数据库初始化在工作线程执行", config->node.id);
+        self().getLogger().info(
+            "rbank enabled for node {}; database initialization runs on a worker thread",
+            config->node.id
+        );
 
         return true;
     } catch (std::exception const& e) {
@@ -137,7 +149,9 @@ bool Plugin::disable() {
 
 bool Plugin::unload() {
     if (subscribed) {
-        self().getLogger().warn("LegacyMoney 不支持退订 after 回调，rbank 需重启服务端才能卸载");
+        self().getLogger().warn(
+            "LegacyMoney cannot unsubscribe its after callback; restart the server to unload rbank"
+        );
 
         return false;
     }

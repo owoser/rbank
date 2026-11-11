@@ -20,7 +20,7 @@ void randomBytes(unsigned char* out, size_t n) {
     require(
         BCryptGenRandom(nullptr, out, static_cast<ULONG>(n), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0,
         "RANDOM",
-        "系统随机源不可用"
+        "System random source is unavailable"
     );
 }
 
@@ -36,7 +36,11 @@ unsigned choose(unsigned range) {
 
 std::string xuidHash(std::string const& xuid, std::string const& alphabet, int size) {
     BCRYPT_ALG_HANDLE alg{};
-    require(BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) >= 0, "HASH", "SHA256 不可用");
+    require(
+        BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) >= 0,
+        "HASH",
+        "SHA256 is unavailable"
+    );
 
     std::array<unsigned char, 32> hash{};
     auto                          status = BCryptHash(
@@ -49,7 +53,7 @@ std::string xuidHash(std::string const& xuid, std::string const& alphabet, int s
         static_cast<ULONG>(hash.size())
     );
     BCryptCloseAlgorithmProvider(alg, 0);
-    require(status >= 0, "HASH", "SHA256 计算失败");
+    require(status >= 0, "HASH", "SHA256 computation failed");
 
     std::string out;
     for (int i = 0; i < size; ++i) {
@@ -62,7 +66,7 @@ std::string xuidHash(std::string const& xuid, std::string const& alphabet, int s
 } // namespace
 
 CardGenerator::CardGenerator(bootstrap::CardConfig c) : cfg(std::move(c)) {
-    require(cfg.length >= 4 && cfg.length <= 64, "CONFIG", "卡号长度必须在 4–64 之间");
+    require(cfg.length >= 4 && cfg.length <= 64, "CONFIG", "Card number length must be between 4 and 64");
 
     std::unordered_set<char> unique(cfg.alphabet.begin(), cfg.alphabet.end());
     require(
@@ -70,14 +74,18 @@ CardGenerator::CardGenerator(bootstrap::CardConfig c) : cfg(std::move(c)) {
             && cfg.alphabet.find_first_not_of("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
                    == std::string::npos,
         "CONFIG",
-        "卡号 alphabet 必须是无重复的数字字母表"
+        "Card alphabet must be a duplicate-free alphanumeric set"
     );
-    require(cfg.checksum == "NONE" || cfg.checksum == "LUHN" || cfg.checksum == "LUHN10", "CONFIG", "不支持的校验规则");
+    require(
+        cfg.checksum == "NONE" || cfg.checksum == "LUHN" || cfg.checksum == "LUHN10",
+        "CONFIG",
+        "Unsupported checksum rule"
+    );
 
     int total = cfg.checksum == "NONE" ? 0 : 1;
     for (auto const& spec : cfg.fields) {
         auto colon = spec.find(':');
-        require(colon != std::string::npos, "CONFIG", "卡号字段需要 TYPE:length");
+        require(colon != std::string::npos, "CONFIG", "Card fields must be declared as TYPE:length");
 
         auto type      = spec.substr(0, colon);
         int  size      = 0;
@@ -85,24 +93,28 @@ CardGenerator::CardGenerator(bootstrap::CardConfig c) : cfg(std::move(c)) {
         require(
             ec == std::errc{} && ptr == spec.data() + spec.size() && size > 0 && size <= 64,
             "CONFIG",
-            "卡号字段长度无效"
+            "Card field length is invalid"
         );
         require(
             type == "SERVER_CODE" || type == "SEQ" || type == "XUID_HASH" || type == "RANDOM_UPPER"
                 || type == "RANDOM_LOWER" || type == "RANDOM_DIGIT" || type == "RANDOM_ALNUM",
             "CONFIG",
-            "不支持的卡号字段"
+            "Unsupported card field type"
         );
 
         if (type == "SERVER_CODE") {
-            require(cfg.serverCode.size() == static_cast<size_t>(size), "CONFIG", "server_code 长度与规则不符");
+            require(
+                cfg.serverCode.size() == static_cast<size_t>(size),
+                "CONFIG",
+                "server_code length does not match the rule"
+            );
         }
         if (cfg.checksum == "LUHN10") {
             auto digits = [](std::string const& s) { return s.find_first_not_of("0123456789") == std::string::npos; };
             require(
                 type == "RANDOM_DIGIT" || type == "SEQ" || (type == "SERVER_CODE" && digits(cfg.serverCode)),
                 "CONFIG",
-                "LUHN10 只接受数字卡号"
+                "LUHN10 only accepts digit card numbers"
             );
         }
 
@@ -110,7 +122,7 @@ CardGenerator::CardGenerator(bootstrap::CardConfig c) : cfg(std::move(c)) {
         total += size;
     }
 
-    require(total == cfg.length, "CONFIG", "卡号字段总长（含校验位）必须等于 length");
+    require(total == cfg.length, "CONFIG", "Card field lengths including checksum must equal length");
 }
 
 std::string CardGenerator::generate(std::string const& xuid, Session& s) {
@@ -155,7 +167,7 @@ std::string CardGenerator::generate(std::string const& xuid, Session& s) {
     size_t base     = alphabet.size();
     for (auto it = out.rbegin(); it != out.rend(); ++it) {
         auto digit = alphabet.find(*it);
-        require(digit != std::string::npos, "CONFIG", "卡号字段含校验字母表以外的字符");
+        require(digit != std::string::npos, "CONFIG", "Card field contains characters outside the checksum alphabet");
 
         auto add  = factor * digit;
         sum      += add / base + add % base;

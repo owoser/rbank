@@ -14,16 +14,25 @@ using namespace core;
 
 namespace {
 
+std::string balanceLabel(Amount balance, std::string_view locale) {
+    return translate({"Balance {0} base", {std::to_string(balance)}}, locale);
+}
+
+std::string title(std::string const& action, std::string_view locale) {
+    return translate(action == "deposit" ? "Deposit" : action == "withdraw" ? "Withdraw" : "Transfer", locale);
+}
+
 /// 一次打开表单生成一个请求键，其所有回调复用；指令每次敲击都是新请求，不参与去重。
 void amountForm(std::shared_ptr<Application> const& app, Player& p, std::string card, std::string action) {
     auto          key  = app->requestKey();
     std::weak_ptr weak = app;
 
-    ll::form::CustomForm form(action == "deposit" ? "存款" : action == "withdraw" ? "取款" : "转账");
+    auto                 locale = p.getLocaleCode();
+    ll::form::CustomForm form(title(action, locale));
     if (action == "pay") {
-        form.appendInput("recipient", "收款卡号或玩家 ID");
+        form.appendInput("recipient", translate("Recipient card number or player ID", locale));
     }
-    form.appendInput("amount", action == "pay" ? "金额（base）" : "金额（本服货币）");
+    form.appendInput("amount", translate(action == "pay" ? "Amount (base)" : "Amount (local currency)", locale));
 
     form.sendTo(
         p,
@@ -57,15 +66,17 @@ void amountForm(std::shared_ptr<Application> const& app, Player& p, std::string 
 
                         return bank.pay({xuid, card, peer, n, key});
                     },
-                    [xuid](Result r) { playerByXuid(xuid, [&](Player& p) { p.sendMessage(render(r)); }); }
+                    [xuid](Result r) {
+                        playerByXuid(xuid, [&](Player& p) { p.sendMessage(render(r, p.getLocaleCode())); });
+                    }
                 );
                 if (!queued) {
-                    player.sendMessage("银行繁忙，请稍后重试");
+                    player.sendMessage(translate("Bank is busy, try again later", player.getLocaleCode()));
                 }
             } catch (Failure const& e) {
-                player.sendMessage(e.what());
+                player.sendMessage(translate(e.detail, player.getLocaleCode()));
             } catch (...) {
-                player.sendMessage("请输入有效金额");
+                player.sendMessage(translate("Enter a valid amount", player.getLocaleCode()));
             }
         }
     );
@@ -84,25 +95,26 @@ void cardMenu(std::shared_ptr<Application> const& app, Player& p, std::string no
             }
 
             playerByXuid(xuid, [&](Player& player) {
+                auto locale = player.getLocaleCode();
                 if (!info.ok()) {
-                    player.sendMessage(render(info));
+                    player.sendMessage(render(info, locale));
                     return;
                 }
 
-                ll::form::SimpleForm form(no, render(info));
+                ll::form::SimpleForm form(no, render(info, locale));
                 for (auto const& [label, action] : std::vector<std::pair<std::string, std::string>>{
-                         {"存款", "deposit" },
-                         {"取款", "withdraw"},
-                         {"转账", "pay"     }
+                         {"Deposit",  "deposit" },
+                         {"Withdraw", "withdraw"},
+                         {"Transfer", "pay"     }
                 }) {
-                    form.appendButton(label, [weak, no, action](Player& p) {
+                    form.appendButton(translate(label, locale), [weak, no, action](Player& p) {
                         if (auto app = weak.lock(); app && app->alive()) {
                             amountForm(app, p, no, action);
                         }
                     });
                 }
 
-                form.appendButton("流水", [weak, xuid](Player& p) {
+                form.appendButton(translate("History", locale), [weak, xuid](Player& p) {
                     auto app = weak.lock();
                     if (!app || !app->alive()) {
                         return;
@@ -112,16 +124,25 @@ void cardMenu(std::shared_ptr<Application> const& app, Player& p, std::string no
                             [xuid](Bank& bank) { return bank.history(xuid); },
                             [xuid](Result r) {
                                 playerByXuid(xuid, [&](Player& p) {
-                                    ll::form::SimpleForm("流水", render(r)).sendTo(p);
+                                    ll::form::SimpleForm(
+                                        translate("History", p.getLocaleCode()),
+                                        render(r, p.getLocaleCode())
+                                    )
+                                        .sendTo(p);
                                 });
                             }
                         )) {
-                        p.sendMessage("银行繁忙，请稍后重试");
+                        p.sendMessage(translate("Bank is busy, try again later", p.getLocaleCode()));
                     }
                 });
 
-                form.appendButton("注销", [weak, xuid, no](Player& p) {
-                    ll::form::ModalForm("注销银行卡", no, "注销", "取消")
+                form.appendButton(translate("Close", locale), [weak, xuid, no](Player& p) {
+                    ll::form::ModalForm(
+                        translate("Close bank card", p.getLocaleCode()),
+                        no,
+                        translate("Close", p.getLocaleCode()),
+                        translate("Cancel", p.getLocaleCode())
+                    )
                         .sendTo(
                             p,
                             [weak, xuid, no](Player& p, ll::form::ModalFormResult choice, ll::form::FormCancelReason) {
@@ -137,10 +158,12 @@ void cardMenu(std::shared_ptr<Application> const& app, Player& p, std::string no
                                 if (!app->submit(
                                         [xuid, no](Bank& bank) { return bank.close(xuid, no); },
                                         [xuid](Result r) {
-                                            playerByXuid(xuid, [&](Player& p) { p.sendMessage(render(r)); });
+                                            playerByXuid(xuid, [&](Player& p) {
+                                                p.sendMessage(render(r, p.getLocaleCode()));
+                                            });
                                         }
                                     )) {
-                                    p.sendMessage("银行繁忙，请稍后重试");
+                                    p.sendMessage(translate("Bank is busy, try again later", p.getLocaleCode()));
                                 }
                             }
                         );
@@ -167,16 +190,17 @@ void showCards(std::shared_ptr<Application> const& app, Player& p) {
                 }
 
                 playerByXuid(xuid, [&](Player& player) {
+                    auto locale = player.getLocaleCode();
                     if (!r.ok()) {
-                        player.sendMessage(render(r));
+                        player.sendMessage(render(r, locale));
                         return;
                     }
 
-                    ll::form::SimpleForm form("跨服银行");
+                    ll::form::SimpleForm form(translate("Cross-server bank", locale));
                     for (auto const& card : r.data) {
                         auto no = card.at("card_no").get<std::string>();
                         form.appendButton(
-                            no + "\n余额 " + std::to_string(card.at("balance_base").get<Amount>()) + " base",
+                            no + "\n" + balanceLabel(card.at("balance_base").get<Amount>(), locale),
                             [weak, no](Player& p) {
                                 if (auto app = weak.lock(); app && app->alive()) {
                                     cardMenu(app, p, no);
@@ -185,7 +209,7 @@ void showCards(std::shared_ptr<Application> const& app, Player& p) {
                         );
                     }
 
-                    form.appendButton("开户", [weak, xuid](Player& p) {
+                    form.appendButton(translate("Open card", locale), [weak, xuid](Player& p) {
                         auto app = weak.lock();
                         if (!app || !app->alive()) {
                             return;
@@ -195,14 +219,14 @@ void showCards(std::shared_ptr<Application> const& app, Player& p) {
                                 [xuid](Bank& bank) { return bank.create(xuid); },
                                 [weak, xuid](Result created) {
                                     playerByXuid(xuid, [&](Player& p) {
-                                        p.sendMessage(render(created));
+                                        p.sendMessage(render(created, p.getLocaleCode()));
                                         if (auto app = weak.lock(); app && created.ok()) {
                                             showCards(app, p);
                                         }
                                     });
                                 }
                             )) {
-                            p.sendMessage("银行繁忙，请稍后重试");
+                            p.sendMessage(translate("Bank is busy, try again later", p.getLocaleCode()));
                         }
                     });
 
@@ -210,7 +234,7 @@ void showCards(std::shared_ptr<Application> const& app, Player& p) {
                 });
             }
         )) {
-        p.sendMessage("银行繁忙，请稍后重试");
+        p.sendMessage(translate("Bank is busy, try again later", p.getLocaleCode()));
     }
 }
 
@@ -224,8 +248,9 @@ void onJoin(std::shared_ptr<Application> const& app, Player& p) {
         }
 
         playerByXuid(xuid, [&](Player& player) {
-            ll::form::SimpleForm form("跨服银行", render(r));
-            form.appendButton("银行卡", [weak](Player& p) {
+            auto                 locale = player.getLocaleCode();
+            ll::form::SimpleForm form(translate("Cross-server bank", locale), render(r, locale));
+            form.appendButton(translate("Bank cards", locale), [weak](Player& p) {
                 if (auto app = weak.lock(); app && app->alive()) {
                     showCards(app, p);
                 }

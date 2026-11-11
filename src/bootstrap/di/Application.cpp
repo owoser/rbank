@@ -1,5 +1,6 @@
 #include "bootstrap/di/Application.h"
 
+#include "adapter/common/Presentation.h"
 #include "adapter/http/HttpServer.h"
 #include "ll/api/service/Bedrock.h"
 #include "ll/api/thread/ServerThreadExecutor.h"
@@ -118,7 +119,7 @@ bool Application::submit(std::function<Result(core::Bank&)> task, Reply reply) {
 
     return workers.submit([this, running, task = std::move(task), reply = std::move(reply)] {
         auto result = initialized.load() ? guarded([&] { return task(bank); })
-                                         : Result::fail("UNAVAILABLE", "银行维护中，请稍后重试");
+                                         : Result::fail("UNAVAILABLE", "Bank is under maintenance, try again later");
 
         // 表单与消息只能在主线程回调，且只回传值，不跨线程保存 Player 引用。
         ll::thread::ServerThreadExecutor::getDefault().execute([running, result = std::move(result), reply] {
@@ -137,7 +138,7 @@ void Application::maintain() {
     if (!registered) {
         registered = s->registerNode(node);
         if (!registered) {
-            log("server_id 与已登记的名称或货币不一致，银行已降级只读");
+            log("server_id does not match the registered name or currency; bank downgraded to read-only");
             initialized = true;
 
             return;
@@ -160,7 +161,7 @@ void Application::maintain() {
         } catch (...) {
             // 审计是只读旁路：写库失败只丢弃，绝不影响原版经济。
             if (++failures % 10 == 1) {
-                log("审计批次写库失败，已丢弃");
+                log("Audit batch write failed and was dropped");
             }
         }
     }
@@ -180,8 +181,9 @@ void Application::pollRates() {
 
     for (auto const& rate : rates.changes(current)) {
         auto running = active;
-        auto message = "[rbank] " + rate.server + " 汇率已调整为 " + std::to_string(rate.value) + " / base";
-        ll::thread::ServerThreadExecutor::getDefault().execute([running, message] {
+        auto server  = rate.server;
+        auto value   = rate.value;
+        ll::thread::ServerThreadExecutor::getDefault().execute([running, server, value] {
             if (!running->load()) {
                 return;
             }
@@ -189,7 +191,15 @@ void Application::pollRates() {
             auto level = ll::service::getLevel();
             if (level) {
                 level->forEachPlayer([&](Player& player) {
-                    player.sendMessage(message);
+                    player.sendMessage(
+                        adapter::translate(
+                            {
+                                "[rbank] Rate for {0} is now {1} / base",
+                                {server, std::to_string(value)}
+                    },
+                            player.getLocaleCode()
+                        )
+                    );
 
                     return true;
                 });
@@ -250,7 +260,7 @@ void Application::join(std::string const& xuid, Reply reply) {
     submit(
         [this, xuid](core::Bank& b) {
             if (!database.open()->config().joinForm) {
-                return Result::fail("SKIP", {});
+                return Result::fail("SKIP");
             }
 
             auto cards   = b.list(xuid);

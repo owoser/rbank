@@ -9,7 +9,11 @@ namespace rbank::core {
 /// 手续费一律在 base 层计收：ceil(base × ppm / 1e6) + fixed，向上取整。
 struct FeePolicy {
     static Amount calculate(Amount base, Fee fee) {
-        require(base >= 0 && fee.ppm >= 0 && fee.ppm <= 1'000'000 && fee.fixed >= 0, "CONFIG", "手续费配置无效");
+        require(
+            base >= 0 && fee.ppm >= 0 && fee.ppm <= 1'000'000 && fee.fixed >= 0,
+            "CONFIG",
+            "Fee configuration is invalid"
+        );
 
         // 拆分乘法，使 INT64_MAX 也能计价而不溢出。
         auto whole    = times(base / 1'000'000, fee.ppm);
@@ -21,9 +25,13 @@ struct FeePolicy {
 
     /// 本服货币折算为 base；非整倍一律拒绝，不做静默截断。
     static Amount convert(Amount local, Amount rate) {
-        require(rate > 0, "RATE", "本服汇率未配置");
-        require(local > 0, "AMOUNT", "金额必须为正整数");
-        require(local % rate == 0, "MULTIPLE", "本服最小可操作金额为 " + std::to_string(rate) + "，请输入其整数倍");
+        require(rate > 0, "RATE", "Local rate is not configured");
+        require(local > 0, "AMOUNT", "Amount must be a positive integer");
+        require(
+            local % rate == 0,
+            "MULTIPLE",
+            Message{"Minimum amount is {0}, enter a multiple of it", {std::to_string(rate)}}
+        );
 
         return local / rate;
     }
@@ -31,8 +39,8 @@ struct FeePolicy {
 
 struct SlotService {
     static int available(std::vector<Card> const& cards, int limit) {
-        require(limit > 0 && limit <= 100, "CONFIG", "卡槽配置无效");
-        require(cards.size() < static_cast<size_t>(limit), "SLOTS", "银行卡槽已满");
+        require(limit > 0 && limit <= 100, "CONFIG", "Slot configuration is invalid");
+        require(cards.size() < static_cast<size_t>(limit), "SLOTS", "All card slots are in use");
 
         for (int i = 0; i < limit; ++i) {
             if (std::none_of(cards.begin(), cards.end(), [i](auto const& c) { return c.slot == i; })) {
@@ -40,7 +48,7 @@ struct SlotService {
             }
         }
 
-        throw Failure("SLOTS", "银行卡槽已满");
+        throw Failure("SLOTS", "All card slots are in use");
     }
 };
 
@@ -59,7 +67,7 @@ inline std::vector<Slice> take(std::vector<Lot>& lots, Amount amount) {
         }
     }
 
-    require(amount == 0, "BALANCE", "银行卡余额不足");
+    require(amount == 0, "BALANCE", "Insufficient card balance");
 
     return slices;
 }
@@ -102,7 +110,7 @@ inline WithdrawPlan withdrawPlan(std::vector<Lot> lots, Amount base, std::string
         }
     }
 
-    require(remaining == 0, "BALANCE", "银行卡余额不足");
+    require(remaining == 0, "BALANCE", "Insufficient card balance");
     plan.fee = total;
     if (total > 0) {
         plan.burned = take(ordered, total);

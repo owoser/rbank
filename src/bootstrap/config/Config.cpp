@@ -18,10 +18,14 @@ Json feeJson(core::Fee f) {
 }
 
 core::Fee readFee(Json const& j) {
-    core::require(j.at("ppm").is_number_integer() && j.at("fixed").is_number_integer(), "CONFIG", "手续费必须为整数");
+    core::require(
+        j.at("ppm").is_number_integer() && j.at("fixed").is_number_integer(),
+        "CONFIG",
+        "Fee values must be integers"
+    );
 
     core::Fee f{j.at("ppm").get<core::Amount>(), j.at("fixed").get<core::Amount>()};
-    core::require(f.ppm >= 0 && f.ppm <= 1'000'000 && f.fixed >= 0, "CONFIG", "手续费配置无效");
+    core::require(f.ppm >= 0 && f.ppm <= 1'000'000 && f.fixed >= 0, "CONFIG", "Fee configuration is invalid");
 
     return f;
 }
@@ -29,8 +33,8 @@ core::Fee readFee(Json const& j) {
 Json defaults() {
     return {
         {"server_id",   "server-a"                                                                },
-        {"server_name", "服务器 A"                                                                },
-        {"currency",    "金币"                                                                    },
+        {"server_name", "Server A"                                                                },
+        {"currency",    "Coin"                                                                    },
         {"database",
          {{"host", "127.0.0.1"},
           {"port", 3306},
@@ -82,7 +86,7 @@ core::HotConfig hotConfig(Json const& j) {
         j.at("slots").is_number_integer() && j.at("max_single_base").is_number_integer()
             && j.at("max_daily_base").is_number_integer(),
         "CONFIG",
-        "卡槽与限额必须为整数"
+        "Slots and limits must be integers"
     );
 
     core::HotConfig c;
@@ -100,7 +104,7 @@ core::HotConfig hotConfig(Json const& j) {
     core::require(
         c.slots > 0 && c.slots <= 100 && c.maxSingle > 0 && c.maxDaily >= c.maxSingle,
         "CONFIG",
-        "卡槽或限额配置无效"
+        "Slot or limit configuration is invalid"
     );
 
     return c;
@@ -154,23 +158,23 @@ bool loadConfig(std::filesystem::path const& path, StartupConfig& c) {
     core::require(
         identifier(c.node.id) && identifier(c.database.database),
         "CONFIG",
-        "server_id 与 database 只能使用字母、数字、下划线及短横线"
+        "server_id and database may only contain letters, digits, underscores and hyphens"
     );
     core::require(
         !c.node.name.empty() && c.node.name.size() <= 100 && !c.node.currency.empty() && c.node.currency.size() <= 40,
         "CONFIG",
-        "节点名称或货币名称无效"
+        "Node name or currency name is invalid"
     );
     core::require(
         c.database.pool > 0 && c.database.pool <= 32 && c.workers > 0 && c.workers <= 16 && c.queue > 0
             && c.queue <= 4096 && c.database.timeout > 0 && c.database.timeout <= 30,
         "CONFIG",
-        "线程池或连接池配置无效"
+        "Worker pool or connection pool configuration is invalid"
     );
     core::require(
         !c.http.enabled || (c.http.token.size() >= 32 && c.http.port > 0 && c.http.port <= 65535),
         "CONFIG",
-        "HTTP 需要至少 32 字符的管理令牌"
+        "HTTP admin token must be at least 32 characters"
     );
 
     return true;

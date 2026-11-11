@@ -54,7 +54,7 @@ Result guarded(Fn&& fn) noexcept {
     } catch (Failure const& e) {
         return Result::fail(e.code, e.what());
     } catch (...) {
-        return Result::fail("UNAVAILABLE", "银行维护中，请稍后重试");
+        return Result::fail("UNAVAILABLE", "Bank is under maintenance, try again later");
     }
 }
 

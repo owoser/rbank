@@ -44,11 +44,11 @@ struct Database::Api {
 
     explicit Api(std::string const& library) {
         module = LoadLibraryA(library.c_str());
-        require(module != nullptr, "DB_LIBRARY", "无法加载数据库客户端库: " + library);
+        require(module != nullptr, "DB_LIBRARY", Message{"Cannot load database client library: {0}", {library}});
 
 #define RBANK_LOAD(member, symbol)                                                                                     \
     member = reinterpret_cast<decltype(member)>(GetProcAddress(module, symbol));                                       \
-    require(member != nullptr, "DB_LIBRARY", "数据库客户端库缺少导出: " symbol)
+    require(member != nullptr, "DB_LIBRARY", "Database client library is missing export: " symbol)
         RBANK_LOAD(init, "mysql_init");
         RBANK_LOAD(connect, "mysql_real_connect");
         RBANK_LOAD(options, "mysql_options");
@@ -81,7 +81,7 @@ struct ThreadContext {
     std::shared_ptr<Database::Api> api;
 
     explicit ThreadContext(std::shared_ptr<Database::Api> a) : api(std::move(a)) {
-        require(api->threadInit() == 0, "DB", "无法初始化数据库线程上下文");
+        require(api->threadInit() == 0, "DB", "Cannot initialize database thread context");
     }
     ~ThreadContext() { api->threadEnd(); }
 };
@@ -109,7 +109,7 @@ std::string num(Amount n) { return std::to_string(n); }
 Amount integer(std::string const& s) {
     Amount n{};
     auto [p, e] = std::from_chars(s.data(), s.data() + s.size(), n);
-    require(e == std::errc{} && p == s.data() + s.size(), "DB", "数据库返回了非法整数");
+    require(e == std::errc{} && p == s.data() + s.size(), "DB", "Database returned a malformed integer");
 
     return n;
 }
@@ -181,7 +181,7 @@ Rows MysqlSession::sql(std::string const& statement) {
             broken = true;
         }
         if (code == 1062) {
-            throw Failure("DUPLICATE", "该操作已处理，或卡号已存在");
+            throw Failure("DUPLICATE", "This operation was already handled, or the card number exists");
         }
 
         throw std::runtime_error("MySQL " + std::to_string(code) + ": " + pool.client()->errorMessage(connection));
@@ -192,7 +192,7 @@ Rows MysqlSession::sql(std::string const& statement) {
     if (!result) {
         if (pool.client()->errorNumber(connection)) {
             broken = true;
-            throw std::runtime_error("MySQL 结果集读取失败");
+            throw std::runtime_error("Failed to read the MySQL result set");
         }
 
         return rows;
@@ -262,7 +262,7 @@ MysqlSession::MysqlSession(Database& p, std::vector<std::string> xuids) : pool(p
             identity(xuid);
             auto key  = "rbank:xuid:" + xuid;
             auto rows = sql("SELECT GET_LOCK(" + quote(key) + ",2)");
-            require(!rows.empty() && rows[0][0] == "1", "BUSY", "资金操作繁忙，请稍后重试");
+            require(!rows.empty() && rows[0][0] == "1", "BUSY", "Money operation is busy, try again later");
             locks.push_back(key);
         }
     } catch (...) {
@@ -291,7 +291,7 @@ MysqlSession::~MysqlSession() {
 }
 
 void MysqlSession::begin() {
-    require(!transaction, "TRANSACTION", "事务已开启");
+    require(!transaction, "TRANSACTION", "Transaction already started");
     sql("START TRANSACTION");
     transaction = true;
 }
@@ -356,7 +356,7 @@ bool MysqlSession::insertCard(Card const& c) {
 void MysqlSession::saveCard(Card const& c) {
     sql("UPDATE card SET balance_base=" + num(c.balance) + ",version=" + num(c.version) + ",status=" + quote(c.status)
         + " WHERE card_no=" + quote(c.no) + " AND version=" + num(c.version - 1));
-    require(pool.client()->affectedRows(connection) == 1, "CONFLICT", "银行卡版本冲突，请重试");
+    require(pool.client()->affectedRows(connection) == 1, "CONFLICT", "Card version conflict, try again");
 }
 
 std::vector<Lot> MysqlSession::lots(std::string const& no) {
@@ -378,7 +378,7 @@ void MysqlSession::insertLot(Lot const& l) {
 void MysqlSession::consumeLot(std::string const& id, Amount amount) {
     sql("UPDATE card_lot SET remain_base=remain_base-" + num(amount) + " WHERE id=" + quote(id)
         + " AND remain_base>=" + num(amount));
-    require(pool.client()->affectedRows(connection) == 1, "CONFLICT", "资金批次已改变");
+    require(pool.client()->affectedRows(connection) == 1, "CONFLICT", "Fund lot has changed");
 }
 
 void MysqlSession::appendLedger(LedgerEntry const& l) {
@@ -424,7 +424,7 @@ Amount MysqlSession::daily(std::string const& xuid, Direction dir, Time since) {
 }
 
 void MysqlSession::insertIntent(Intent const& i) {
-    require(i.requestKey.size() <= 128, "KEY", "请求标识过长");
+    require(i.requestKey.size() <= 128, "KEY", "Request key is too long");
 
     Json slices = Json::array();
     for (auto const& s : i.slices) {
@@ -551,7 +551,7 @@ Amount MysqlSession::sequence(std::string const& key) {
 
 void MysqlSession::migrate(std::filesystem::path const& directory) {
     auto lock = sql("SELECT GET_LOCK('rbank:migration',10)");
-    require(!lock.empty() && lock[0][0] == "1", "BUSY", "迁移锁繁忙");
+    require(!lock.empty() && lock[0][0] == "1", "BUSY", "Migration lock is busy");
 
     try {
         // 版本表先于任何脚本存在：它是「哪些脚本已跑过」的唯一记录。
@@ -559,7 +559,11 @@ void MysqlSession::migrate(std::filesystem::path const& directory) {
             "version INT PRIMARY KEY, applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
 
         std::vector<std::pair<int, std::filesystem::path>> scripts;
-        require(std::filesystem::is_directory(directory), "MIGRATION", "迁移目录缺失: " + directory.string());
+        require(
+            std::filesystem::is_directory(directory),
+            "MIGRATION",
+            Message{"Migration directory is missing: {0}", {directory.string()}}
+        );
         for (auto const& entry : std::filesystem::directory_iterator(directory)) {
             auto name      = entry.path().filename().string();
             auto version   = 0;
@@ -581,7 +585,7 @@ void MysqlSession::migrate(std::filesystem::path const& directory) {
             }
 
             std::ifstream in(path);
-            require(in.good(), "MIGRATION", "迁移脚本缺失: " + path.string());
+            require(in.good(), "MIGRATION", Message{"Migration script is missing: {0}", {path.string()}});
             std::stringstream text;
             text << in.rdbuf();
             std::string statement;
@@ -618,10 +622,10 @@ void* Database::acquire() {
     thread_local ThreadContext context(client());
 
     std::unique_lock lock(mutex);
-    require(std::chrono::steady_clock::now() >= circuitUntil, "UNAVAILABLE", "银行维护中");
+    require(std::chrono::steady_clock::now() >= circuitUntil, "UNAVAILABLE", "Bank is under maintenance");
     auto limit = static_cast<size_t>(std::max(cfg.pool, 1));
     if (!available.wait_for(lock, std::chrono::seconds(2), [this, limit] { return !idle.empty() || count < limit; })) {
-        throw Failure("BUSY", "银行繁忙");
+        throw Failure("BUSY", "Bank is busy");
     }
 
     if (!idle.empty()) {
@@ -634,7 +638,7 @@ void* Database::acquire() {
     ++count;
     lock.unlock();
 
-    std::string detail = "无法创建数据库连接句柄";
+    std::string detail = "Cannot create a database connection handle";
 
     auto connection = api->init(nullptr);
     if (connection) {
@@ -672,7 +676,7 @@ void* Database::acquire() {
         }
 
         // 保留驱动原文：证书、权限、网络问题都只能从这里看出来。
-        detail = api->errorMessage(connection) ? api->errorMessage(connection) : "未知错误";
+        detail = api->errorMessage(connection) ? api->errorMessage(connection) : "Unknown error";
         api->close(connection);
     }
 
@@ -685,7 +689,7 @@ void* Database::acquire() {
     }
     available.notify_one();
 
-    throw Failure("UNAVAILABLE", "银行数据库不可用: " + detail);
+    throw Failure("UNAVAILABLE", Message{"Bank database is unavailable: {0}", {detail}});
 }
 
 std::string Database::reason() const {

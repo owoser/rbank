@@ -18,13 +18,13 @@ using namespace core;
 
 LegacyMoney::LegacyMoney(std::shared_ptr<std::atomic_bool> a) : active(std::move(a)) {
     auto module = GetModuleHandleW(L"LegacyMoney.dll");
-    require(module != nullptr, "LEGACY", "LegacyMoney 尚未加载");
+    require(module != nullptr, "LEGACY", "LegacyMoney is not loaded");
 
     read     = reinterpret_cast<Read>(GetProcAddress(module, "LLMoney_Get"));
     addFn    = reinterpret_cast<Write>(GetProcAddress(module, "LLMoney_Add"));
     reduceFn = reinterpret_cast<Write>(GetProcAddress(module, "LLMoney_Reduce"));
     listen   = reinterpret_cast<Listen>(GetProcAddress(module, "LLMoney_ListenAfterEvent"));
-    require(read && addFn && reduceFn && listen, "LEGACY", "LegacyMoney 接口版本不兼容");
+    require(read && addFn && reduceFn && listen, "LEGACY", "LegacyMoney interface version is incompatible");
 }
 
 namespace {
@@ -97,7 +97,7 @@ std::optional<Amount> LegacyMoney::get(std::string const& xuid) {
 }
 
 MoneyOutcome LegacyMoney::invoke(Write fn, std::string const& xuid, Amount value) {
-    require(value > 0, "AMOUNT", "金额必须为正整数");
+    require(value > 0, "AMOUNT", "Amount must be a positive integer");
 
     auto result = onMain<bool>(active, [fn, xuid, value] { return online(xuid) && fn(xuid, value); });
     if (!result) {

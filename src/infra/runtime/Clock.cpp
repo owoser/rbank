@@ -24,7 +24,7 @@ std::string RandomId::next() {
     core::require(
         BCryptGenRandom(nullptr, bytes.data(), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG) >= 0,
         "RANDOM",
-        "系统随机源不可用"
+        "System random source is unavailable"
     );
 
     static constexpr char hex[] = "0123456789abcdef";

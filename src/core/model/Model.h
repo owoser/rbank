@@ -5,6 +5,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -16,35 +17,48 @@ using Amount = std::int64_t;
 using Time   = std::int64_t;
 using Json   = nlohmann::json;
 
-/// 业务失败：code 供调用方分支，消息直接呈现给玩家。
+/// 呈现文本：key 既是原文也是 i18n 键（无译文时回落原文），args 填充 {0}… 占位符。
+struct Message {
+    std::string              key;
+    std::vector<std::string> args;
+
+    Message() = default;
+    Message(char const* k) : key(k) {}
+    Message(std::string_view k) : key(k) {}
+    Message(std::string k) : key(std::move(k)) {}
+    Message(std::string k, std::vector<std::string> a) : key(std::move(k)), args(std::move(a)) {}
+};
+
+/// 业务失败：code 供调用方分支，文本交由接入层按玩家语言呈现。
 struct Failure : std::runtime_error {
     std::string code;
+    Message     detail;
 
-    Failure(std::string c, std::string const& m) : std::runtime_error(m), code(std::move(c)) {}
+    Failure(std::string c, Message m) : std::runtime_error(m.key), code(std::move(c)), detail(std::move(m)) {}
 };
 
 /// 三条接入通道统一返回结构。
 struct Result {
     std::string code = "OK";
-    std::string message;
+    Message     message;
     Json        data;
 
     bool ok() const { return code == "OK"; }
 
     static Result success(Json d = {}) { return {"OK", {}, std::move(d)}; }
-    static Result fail(std::string c, std::string m) { return {std::move(c), std::move(m), {}}; }
+    static Result fail(std::string c, Message m = {}) { return {std::move(c), std::move(m), {}}; }
 };
 
 /// 前置守卫：不满足即抛出，由 guarded 统一转成 Result。
-inline void require(bool test, std::string const& code, std::string const& message) {
+inline void require(bool test, std::string const& code, Message message) {
     if (!test) {
-        throw Failure(code, message);
+        throw Failure(code, std::move(message));
     }
 }
 
 /// 断言两数之和可表示；结果不参与计算时单独使用。
 inline void fits(Amount a, Amount b) {
-    require(a >= 0 && b >= 0 && a <= std::numeric_limits<Amount>::max() - b, "OVERFLOW", "金额超出范围");
+    require(a >= 0 && b >= 0 && a <= std::numeric_limits<Amount>::max() - b, "OVERFLOW", "Amount out of range");
 }
 
 inline Amount plus(Amount a, Amount b) {
@@ -54,7 +68,11 @@ inline Amount plus(Amount a, Amount b) {
 }
 
 inline Amount times(Amount a, Amount b) {
-    require(a >= 0 && b >= 0 && (b == 0 || a <= std::numeric_limits<Amount>::max() / b), "OVERFLOW", "金额超出范围");
+    require(
+        a >= 0 && b >= 0 && (b == 0 || a <= std::numeric_limits<Amount>::max() / b),
+        "OVERFLOW",
+        "Amount out of range"
+    );
 
     return a * b;
 }
@@ -64,7 +82,7 @@ inline void identity(std::string const& xuid) {
     require(
         !xuid.empty() && xuid.size() <= 20 && xuid != "0" && xuid.find_first_not_of("0123456789") == std::string::npos,
         "IDENTITY",
-        "需要已认证的玩家身份"
+        "A verified player identity is required"
     );
 }
 

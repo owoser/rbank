@@ -1,5 +1,6 @@
 #include "adapter/http/HttpServer.h"
 
+#include "adapter/common/Presentation.h"
 #include "bootstrap/config/Config.h"
 #include "bootstrap/di/Application.h"
 
@@ -13,11 +14,12 @@ using namespace core;
 
 namespace {
 
+/// 管理接口面向运维脚本，统一返回英文，不随玩家语言变化。
 Json envelope(Result const& r) {
     return {
-        {"code",    r.code   },
-        {"message", r.message},
-        {"data",    r.data   }
+        {"code", r.code},
+        {"message", translate(r.message, "en")},
+        {"data", r.data}
     };
 }
 
@@ -55,7 +57,7 @@ Result writeConfig(Application& app, std::string const& body) {
 
 Result intentInfo(Application& app, std::string const& id) {
     auto found = app.store().open()->intent(id);
-    require(found.has_value(), "INTENT", "单据不存在");
+    require(found.has_value(), "INTENT", "Intent does not exist");
 
     return Result::success({
         {"intent_id",    found->id         },
@@ -103,7 +105,7 @@ struct HttpServer::Impl {
             if (!authorized(request)) {
                 response.status = 401;
                 response.set_content(
-                    envelope(Result::fail("AUTH", "需要管理令牌")).dump(),
+                    envelope(Result::fail("AUTH", "Admin token is required")).dump(),
                     "application/json; charset=utf-8"
                 );
 
@@ -114,11 +116,11 @@ struct HttpServer::Impl {
             try {
                 result = fn(request);
             } catch (Json::exception const&) {
-                result = Result::fail("INPUT", "JSON 参数无效");
+                result = Result::fail("INPUT", "Invalid JSON parameters");
             } catch (Failure const& e) {
                 result = Result::fail(e.code, e.what());
             } catch (...) {
-                result = Result::fail("UNAVAILABLE", "银行维护中");
+                result = Result::fail("UNAVAILABLE", "Bank is under maintenance");
             }
 
             response.status = result.ok() ? 200 : result.code == "UNAVAILABLE" ? 503 : 400;
@@ -156,7 +158,7 @@ struct HttpServer::Impl {
         });
         post("/v1/rates", [this](auto const& r) {
             auto j = Json::parse(r.body);
-            require(j.at("rate").is_number_integer(), "INPUT", "汇率必须为整数");
+            require(j.at("rate").is_number_integer(), "INPUT", "Rate must be an integer");
 
             return app.services()
                 .setRate(j.at("server_id").get<std::string>(), j.at("rate").get<Amount>(), "http-admin");
@@ -168,7 +170,7 @@ struct HttpServer::Impl {
         });
 
         if (!server.bind_to_port(config.host, config.port)) {
-            throw std::runtime_error("HTTP 监听失败: " + config.host + ":" + std::to_string(config.port));
+            throw std::runtime_error("HTTP listener failed: " + config.host + ":" + std::to_string(config.port));
         }
         thread = std::thread([this] { server.listen_after_bind(); });
     }

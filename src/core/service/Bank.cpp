@@ -11,15 +11,15 @@ void verify(Card const& c, std::vector<Lot> const& lots) {
         sum = plus(sum, lot.remain);
     }
 
-    require(sum == c.balance, "INVARIANT", "银行卡批次与余额不一致");
+    require(sum == c.balance, "INVARIANT", "Card lots do not match the card balance");
 }
 
 } // namespace
 
 Card Bank::owned(Session& s, std::string const& xuid, std::string const& no, bool active) {
     auto c = s.card(no);
-    require(c && c->xuid == xuid && c->status != "CLOSED", "CARD", "未找到你的银行卡");
-    require(!active || c->status == "ACTIVE", "FROZEN", "银行卡已冻结");
+    require(c && c->xuid == xuid && c->status != "CLOSED", "CARD", "Card not found");
+    require(!active || c->status == "ACTIVE", "FROZEN", "Card is frozen");
 
     return *c;
 }
@@ -28,16 +28,16 @@ void Bank::ready(Session& s, std::string const& xuid) {
     identity(xuid);
 
     auto cfg = s.config();
-    require(cfg.enabled, "MAINTENANCE", "银行维护中");
+    require(cfg.enabled, "MAINTENANCE", "Bank is under maintenance");
 
     auto nodes = s.nodes();
     auto self  = std::find_if(nodes.begin(), nodes.end(), [this](auto const& n) { return n.id == node.id; });
     require(
         self != nodes.end() && self->name == node.name && self->currency == node.currency && self->status == "ONLINE",
         "NODE",
-        "银行节点身份异常，当前只读"
+        "Bank node identity mismatch; read-only"
     );
-    require(!s.unsettled(xuid), "PENDING", "有待确认的资金操作，请稍后重试");
+    require(!s.unsettled(xuid), "PENDING", "A pending transfer is still being confirmed, try again later");
 }
 
 Amount Bank::rate(Session& s) {
@@ -47,14 +47,14 @@ Amount Bank::rate(Session& s) {
         }
     }
 
-    throw Failure("RATE", "本服汇率未配置");
+    throw Failure("RATE", "Local rate is not configured");
 }
 
 void Bank::limits(Session& s, HotConfig const& cfg, std::string const& xuid, Direction dir, Amount base) {
-    require(base > 0 && base <= cfg.maxSingle, "LIMIT", "金额超过单笔限额");
+    require(base > 0 && base <= cfg.maxSingle, "LIMIT", "Amount exceeds the per-transaction limit");
 
     auto today = clock.now() / 86400 * 86400;
-    require(plus(s.daily(xuid, dir, today), base) <= cfg.maxDaily, "LIMIT", "金额超过日限额");
+    require(plus(s.daily(xuid, dir, today), base) <= cfg.maxDaily, "LIMIT", "Amount exceeds the daily limit");
 }
 
 void Bank::ledger(
@@ -103,7 +103,7 @@ Result Bank::create(std::string const& xuid) {
         }
     }
 
-    throw Failure("CARD_GENERATION", "卡号生成失败，请联系管理员调整规则");
+    throw Failure("CARD_GENERATION", "Card number generation failed, contact an administrator");
 }
 
 Result Bank::close(std::string const& xuid, std::string const& no) {
@@ -112,7 +112,7 @@ Result Bank::close(std::string const& xuid, std::string const& no) {
     ready(*s, xuid);
 
     auto c = owned(*s, xuid, no);
-    require(c.balance == 0, "BALANCE", "余额必须为 0 才能删卡");
+    require(c.balance == 0, "BALANCE", "Card balance must be zero before closing");
     verify(c, s->lots(c.no));
 
     c.status = "CLOSED";
@@ -141,7 +141,7 @@ Result Bank::list(std::string const& xuid) {
     }
 
     if (cards.empty()) {
-        return Result::fail("EMPTY", "尚未开通银行卡");
+        return Result::fail("EMPTY", "No bank card opened yet");
     }
 
     return Result::success(std::move(data));
@@ -181,11 +181,11 @@ Result Bank::history(std::string const& xuid, int count) {
 
 void Bank::settleDeposit(Session& s, Intent const& i, State from, std::string const& note) {
     Transaction tx(s);
-    require(s.cas(i.id, from, State::Settled, clock.now(), note), "TAKEN", "该操作已处理");
+    require(s.cas(i.id, from, State::Settled, clock.now(), note), "TAKEN", "This operation was already handled");
 
     auto c      = owned(s, i.xuid, i.card, false);
     auto amount = i.base - i.fee;
-    require(amount > 0, "INVARIANT", "存款入账金额异常");
+    require(amount > 0, "INVARIANT", "Deposit credit amount is invalid");
     verify(c, s.lots(c.no));
 
     c.balance = plus(c.balance, amount);
@@ -207,7 +207,7 @@ Result Bank::deposit(CashRequest const& q) {
     auto s   = db.open({q.xuid});
     auto cfg = s->config();
     ready(*s, q.xuid);
-    require(cfg.deposits, "DISABLED", "存款暂未开放");
+    require(cfg.deposits, "DISABLED", "Deposits are temporarily unavailable");
 
     auto c    = owned(*s, q.xuid, q.card);
     auto r    = rate(*s);
@@ -215,12 +215,12 @@ Result Bank::deposit(CashRequest const& q) {
     limits(*s, cfg, q.xuid, Direction::Deposit, base);
 
     auto fee = FeePolicy::calculate(base, cfg.deposit);
-    require(fee < base, "FEE", "手续费超过本金");
+    require(fee < base, "FEE", "Fee exceeds the principal");
     verify(c, s->lots(c.no));
     fits(c.balance, base - fee);
 
     auto balance = money.get(q.xuid);
-    require(balance && *balance >= q.local, "LEGACY_BALANCE", "本服余额不足或原版经济不可用");
+    require(balance && *balance >= q.local, "LEGACY_BALANCE", "Insufficient local balance or economy unavailable");
 
     Intent i{};
     i.id         = ids.next();
@@ -247,15 +247,19 @@ Result Bank::deposit(CashRequest const& q) {
         s->cas(i.id, State::PendingLegacy, State::RolledBack, clock.now(), "LegacyMoney Reduce rejected");
         tx.commit();
 
-        throw Failure("LEGACY", "原版扣款失败，存款未执行");
+        throw Failure("LEGACY", "LegacyMoney debit failed; deposit was not executed");
     }
     if (outcome == MoneyOutcome::Unknown) {
-        throw Failure("PENDING", "扣款结果待确认，单号 " + i.id);
+        throw Failure("PENDING", Message{"Debit result pending confirmation, intent {0}", {i.id}});
     }
 
     {
         Transaction tx(*s);
-        require(s->cas(i.id, State::PendingLegacy, State::PendingDb, clock.now()), "TAKEN", "该操作已处理");
+        require(
+            s->cas(i.id, State::PendingLegacy, State::PendingDb, clock.now()),
+            "TAKEN",
+            "This operation was already handled"
+        );
         tx.commit();
     }
 
@@ -270,7 +274,7 @@ Result Bank::deposit(CashRequest const& q) {
 
 void Bank::undoWithdrawal(Session& s, Intent const& i, State from, std::string const& note) {
     Transaction tx(s);
-    require(s.cas(i.id, from, State::RolledBack, clock.now(), note), "TAKEN", "该操作已处理");
+    require(s.cas(i.id, from, State::RolledBack, clock.now(), note), "TAKEN", "This operation was already handled");
 
     auto c = owned(s, i.xuid, i.card, false);
     verify(c, s.lots(c.no));
@@ -287,7 +291,7 @@ void Bank::undoWithdrawal(Session& s, Intent const& i, State from, std::string c
         lot.created  = slice.created;
         s.insertLot(lot);
     }
-    require(restored == plus(i.base, i.fee), "INVARIANT", "补偿批次不完整");
+    require(restored == plus(i.base, i.fee), "INVARIANT", "Rollback lots are incomplete");
 
     c.balance = plus(c.balance, restored);
     ++c.version;
@@ -300,7 +304,7 @@ Result Bank::withdraw(CashRequest const& q) {
     auto s   = db.open({q.xuid});
     auto cfg = s->config();
     ready(*s, q.xuid);
-    require(cfg.withdrawals, "DISABLED", "取款暂未开放");
+    require(cfg.withdrawals, "DISABLED", "Withdrawals are temporarily unavailable");
 
     auto c    = owned(*s, q.xuid, q.card);
     auto r    = rate(*s);
@@ -312,10 +316,10 @@ Result Bank::withdraw(CashRequest const& q) {
 
     auto plan  = withdrawPlan(lots, base, node.id, cfg.cross);
     auto total = plus(base, plan.fee);
-    require(c.balance >= total, "BALANCE", "银行卡余额不足");
+    require(c.balance >= total, "BALANCE", "Insufficient card balance");
 
     auto legacy = money.get(q.xuid);
-    require(legacy && *legacy >= 0, "LEGACY", "原版经济不可用");
+    require(legacy && *legacy >= 0, "LEGACY", "Legacy economy unavailable");
     fits(*legacy, q.local);
 
     Intent i{};
@@ -337,7 +341,11 @@ Result Bank::withdraw(CashRequest const& q) {
     {
         Transaction tx(*s);
         s->insertIntent(i);
-        require(s->cas(i.id, State::PendingLegacy, State::PendingDb, clock.now()), "TAKEN", "该操作已处理");
+        require(
+            s->cas(i.id, State::PendingLegacy, State::PendingDb, clock.now()),
+            "TAKEN",
+            "This operation was already handled"
+        );
         for (auto const& slice : i.slices) {
             s->consumeLot(slice.lot, slice.amount);
         }
@@ -353,15 +361,19 @@ Result Bank::withdraw(CashRequest const& q) {
     if (outcome == MoneyOutcome::Failed) {
         undoWithdrawal(*s, i, State::PendingDb);
 
-        throw Failure("LEGACY", "原版到账失败，已退回银行卡");
+        throw Failure("LEGACY", "LegacyMoney credit failed; funds returned to the card");
     }
     if (outcome == MoneyOutcome::Unknown) {
-        throw Failure("PENDING", "到账结果待确认，单号 " + i.id);
+        throw Failure("PENDING", Message{"Credit result pending confirmation, intent {0}", {i.id}});
     }
 
     {
         Transaction tx(*s);
-        require(s->cas(i.id, State::PendingDb, State::Settled, clock.now()), "TAKEN", "该操作已处理");
+        require(
+            s->cas(i.id, State::PendingDb, State::Settled, clock.now()),
+            "TAKEN",
+            "This operation was already handled"
+        );
         tx.commit();
     }
 
@@ -374,7 +386,7 @@ Result Bank::withdraw(CashRequest const& q) {
 
 Result Bank::pay(PayRequest const& q) {
     identity(q.xuid);
-    require(q.base > 0, "AMOUNT", "金额必须为正整数");
+    require(q.base > 0, "AMOUNT", "Amount must be a positive integer");
 
     // 先定位收款卡所属玩家，再按排序后的 xuid 加锁重读，避免两把锁交叉死锁。
     std::string targetNo;
@@ -389,27 +401,27 @@ Result Bank::pay(PayRequest const& q) {
                 }
             }
         }
-        require(card && card->status != "CLOSED", "RECIPIENT", "对方未开通银行卡");
+        require(card && card->status != "CLOSED", "RECIPIENT", "Recipient has no bank card");
 
         targetNo   = card->no;
         targetXuid = card->xuid;
     }
-    require(targetXuid != q.xuid, "SELF", "不能向自己转账");
+    require(targetXuid != q.xuid, "SELF", "Cannot transfer to yourself");
 
     auto s = db.open({q.xuid, targetXuid});
     ready(*s, q.xuid);
     ready(*s, targetXuid);
     auto cfg = s->config();
-    require(cfg.transfers, "DISABLED", "转账暂未开放");
+    require(cfg.transfers, "DISABLED", "Transfers are temporarily unavailable");
 
     auto from = owned(*s, q.xuid, q.card);
     auto to   = owned(*s, targetXuid, targetNo);
     limits(*s, cfg, q.xuid, Direction::Transfer, q.base);
 
     auto fee = FeePolicy::calculate(q.base, cfg.transfer);
-    require(fee < q.base, "FEE", "手续费超过本金");
+    require(fee < q.base, "FEE", "Fee exceeds the principal");
     auto total = plus(q.base, fee);
-    require(from.balance >= total, "BALANCE", "银行卡余额不足");
+    require(from.balance >= total, "BALANCE", "Insufficient card balance");
     fits(to.balance, q.base);
 
     auto lots = s->lots(from.no);
@@ -436,7 +448,7 @@ Result Bank::pay(PayRequest const& q) {
 
     Transaction tx(*s);
     s->insertIntent(i);
-    require(s->cas(i.id, State::PendingDb, State::Settled, clock.now()), "TAKEN", "该操作已处理");
+    require(s->cas(i.id, State::PendingDb, State::Settled, clock.now()), "TAKEN", "This operation was already handled");
 
     for (auto const& slice : principal) {
         s->consumeLot(slice.lot, slice.amount);
@@ -500,12 +512,12 @@ Result Bank::slots(std::string const& xuid) {
 
 Result Bank::freeze(std::string const& no, bool frozen) {
     auto found = db.open()->card(no);
-    require(found && found->status != "CLOSED", "CARD", "银行卡不存在");
+    require(found && found->status != "CLOSED", "CARD", "Card does not exist");
 
     auto        s = db.open({found->xuid});
     Transaction tx(*s);
     auto        c = s->card(no);
-    require(c && c->status != "CLOSED", "CARD", "银行卡不存在");
+    require(c && c->status != "CLOSED", "CARD", "Card does not exist");
 
     c->status = frozen ? "FROZEN" : "ACTIVE";
     ++c->version;
@@ -519,7 +531,7 @@ Result Bank::freeze(std::string const& no, bool frozen) {
 }
 
 Result Bank::setRate(std::string const& server, Amount value, std::string const& by) {
-    require(value > 0, "RATE", "汇率必须为正整数");
+    require(value > 0, "RATE", "Rate must be a positive integer");
 
     auto        s     = db.open();
     auto        nodes = s->nodes();
@@ -527,7 +539,7 @@ Result Bank::setRate(std::string const& server, Amount value, std::string const&
     require(
         std::any_of(nodes.begin(), nodes.end(), [&](auto const& n) { return n.id == server; }),
         "NODE",
-        "节点不存在"
+        "Node does not exist"
     );
     s->appendRate({server, by, value, clock.now()});
     tx.commit();
@@ -540,11 +552,11 @@ Result Bank::setRate(std::string const& server, Amount value, std::string const&
 
 Result Bank::resolve(std::string const& id, bool sourceConfirmed, std::string const& by) {
     auto found = db.open()->intent(id);
-    require(found && found->state == State::Orphan, "INTENT", "单据不是 ORPHAN");
+    require(found && found->state == State::Orphan, "INTENT", "Intent is not ORPHAN");
 
     auto s = db.open({found->xuid});
     auto i = s->intent(id);
-    require(i && i->state == State::Orphan, "INTENT", "单据状态已改变");
+    require(i && i->state == State::Orphan, "INTENT", "Intent state has changed");
 
     auto note = "resolved by " + by;
     if (i->dir == Direction::Deposit && sourceConfirmed) {
@@ -554,7 +566,7 @@ Result Bank::resolve(std::string const& id, bool sourceConfirmed, std::string co
     } else {
         Transaction tx(*s);
         auto        target = i->dir == Direction::Deposit ? State::RolledBack : State::Settled;
-        require(s->cas(id, State::Orphan, target, clock.now(), note), "TAKEN", "该操作已处理");
+        require(s->cas(id, State::Orphan, target, clock.now(), note), "TAKEN", "This operation was already handled");
         tx.commit();
     }
 
