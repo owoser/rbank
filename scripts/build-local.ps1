@@ -52,19 +52,22 @@ $flags[$flags.IndexOf('/DLL_PLAT_S')] = '/DLL_PLAT_S'
 $includes = @('/Isrc') + @($includeDirs | ForEach-Object { "/I$_" })
 $sysIncludes = @($systemIncludes | ForEach-Object { "/imsvc$_" })
 
+function Write-CompileCommands($files) {
+    $commands = @(foreach ($source in $files) {
+        $relative = $source.FullName.Substring($project.Length + 1)
+        $object = Join-Path $project ('build/local/' + ($relative -replace '[\\/]', '_') + '.obj')
+        [ordered]@{ directory = $project; file = $source.FullName; arguments = @($clang) + $flags + $includes + $sysIncludes + @('/c', $source.FullName, "/Fo$object") }
+    })
+    [IO.File]::WriteAllText((Join-Path $project 'build/compile_commands.json'), (ConvertTo-Json -InputObject $commands -Depth 5))
+    Write-Output "Generated build/compile_commands.json ($($commands.Count) sources)"
+}
+
 Push-Location $project
 try {
     $sources = @(Get-ChildItem -LiteralPath src -Filter '*.cpp' -Recurse | Sort-Object FullName)
     New-Item -ItemType Directory -Force build/local, build/rbank | Out-Null
-    if ($CompileCommandsOnly) {
-        $commands = @(foreach ($source in $sources) {
-            $object = Join-Path $project ('build/local/' + ($source.FullName.Substring($project.Length + 1) -replace '[\\/]', '_') + '.obj')
-            [ordered]@{ directory = $project; file = $source.FullName; arguments = @($clang) + $flags + $includes + $sysIncludes + @('/c', $source.FullName, "/Fo$object") }
-        })
-        [IO.File]::WriteAllText((Join-Path $project 'compile_commands.json'), (ConvertTo-Json -InputObject $commands -Depth 5))
-        Write-Output "Generated compile_commands.json ($($commands.Count) sources)"
-        return
-    }
+    Write-CompileCommands $sources
+    if ($CompileCommandsOnly) { return }
 
     $objects = @()
     $headerTime = (Get-ChildItem src -Filter '*.h' -Recurse | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
