@@ -118,7 +118,7 @@ struct HttpServer::Impl {
             } catch (Json::exception const&) {
                 result = Result::fail("INPUT", "Invalid JSON parameters");
             } catch (Failure const& e) {
-                result = Result::fail(e.code, e.what());
+                result = Result::fail(e.code, e.detail);
             } catch (...) {
                 result = Result::fail("UNAVAILABLE", "Bank is under maintenance");
             }

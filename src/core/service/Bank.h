@@ -52,7 +52,7 @@ Result guarded(Fn&& fn) noexcept {
     try {
         return fn();
     } catch (Failure const& e) {
-        return Result::fail(e.code, e.what());
+        return Result::fail(e.code, e.detail);
     } catch (...) {
         return Result::fail("UNAVAILABLE", "Bank is under maintenance, try again later");
     }

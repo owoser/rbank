@@ -1,5 +1,6 @@
 // 宿主侧自检：不依赖 MC / MySQL，只验证货物层与纯规则。
 #include "bootstrap/config/Config.h"
+#include "core/model/Model.h"
 #include "core/service/Policy.h"
 #include "infra/cardgen/CardGenerator.h"
 #include "proto/Protocol.h"
@@ -34,6 +35,17 @@ std::string code(Fn&& fn) {
 
 int main() {
     using namespace rbank::core;
+
+    // 占位符：单个参数填满全部出现位置，参数自身内容不被再次展开，越界索引保持原文。
+    check(fill("a {0} b {0}", {"x"}) == "a x b x", "fill replaces every occurrence");
+    check(fill("{0}{1}", {"{1}", "y"}) == "{1}y", "fill does not expand args twice");
+    check(fill("value {1}", {"only"}) == "value {1}", "fill keeps unknown index");
+    check(fill("{} {x} {0", {"a"}) == "{} {x} {0", "fill keeps non-placeholder braces");
+
+    // 业务失败必须携带完整参数，what() 也应给出已填充的原文。
+    Failure failure("DB", Message{"connect failed: {0}", {"timeout"}});
+    check(failure.detail.args == std::vector<std::string>{"timeout"}, "failure keeps args");
+    check(std::string(failure.what()) == "connect failed: timeout", "failure what filled");
 
     // 汇率折算：非整倍必须拒绝，且提示实际倍数。
     check(FeePolicy::convert(1000, 100) == 10, "convert ok");

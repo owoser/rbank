@@ -13,18 +13,9 @@ class Player;
 
 namespace rbank::adapter {
 
-/// 按语言码取译文；缺失时回落到键本身（源码中的英文原文），再顺序替换 {0}… 占位符。
+/// 按语言码取译文；缺失时回落到键本身（源码中的英文原文），再填充 {0}… 占位符。
 inline std::string translate(core::Message const& message, std::string_view locale) {
-    std::string text(ll::i18n::getInstance().get(message.key, locale));
-    for (size_t i = 0; i < message.args.size(); ++i) {
-        auto token = "{" + std::to_string(i) + "}";
-        auto at    = text.find(token);
-        if (at != std::string::npos) {
-            text.replace(at, token.size(), message.args[i]);
-        }
-    }
-
-    return text;
+    return core::fill(ll::i18n::getInstance().get(message.key, locale), message.args);
 }
 
 /// 统一文本呈现：code 只用于程序分支，玩家只看到 message 与数据行。

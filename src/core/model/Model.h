@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -29,12 +30,40 @@ struct Message {
     Message(std::string k, std::vector<std::string> a) : key(std::move(k)), args(std::move(a)) {}
 };
 
-/// 业务失败：code 供调用方分支，文本交由接入层按玩家语言呈现。
+/// 单遍扫描替换 {n}：只认完整占位符，参数值里的 {1} 不会被二次展开；越界索引保持原文。
+inline std::string fill(std::string_view pattern, std::vector<std::string> const& args) {
+    std::string text;
+    text.reserve(pattern.size());
+
+    for (size_t i = 0; i < pattern.size();) {
+        if (pattern[i] == '{') {
+            size_t at    = i + 1;
+            size_t index = 0;
+            while (at < pattern.size() && pattern[at] >= '0' && pattern[at] <= '9') {
+                index = index * 10 + static_cast<size_t>(pattern[at] - '0');
+                ++at;
+            }
+            if (at > i + 1 && at < pattern.size() && pattern[at] == '}' && index < args.size()) {
+                text += args[index];
+                i     = at + 1;
+                continue;
+            }
+        }
+        text += pattern[i++];
+    }
+
+    return text;
+}
+
+/// 业务失败：code 供调用方分支，文本交由接入层按玩家语言呈现；what() 保留已填充的英文原文。
 struct Failure : std::runtime_error {
     std::string code;
     Message     detail;
 
-    Failure(std::string c, Message m) : std::runtime_error(m.key), code(std::move(c)), detail(std::move(m)) {}
+    Failure(std::string c, Message m)
+    : std::runtime_error(fill(m.key, m.args)),
+      code(std::move(c)),
+      detail(std::move(m)) {}
 };
 
 /// 三条接入通道统一返回结构。
