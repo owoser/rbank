@@ -7,9 +7,13 @@
 ## 相关文档
 
 - [插件架构](./docs/插件架构.md)
-- [原版经济插件仓库](./docs-ref/LegacyMoney)
+- [原版经济插件源码](./docs-ref/LegacyMoney/src/API.cpp)
 - [LeviLamina 文档 nav 索引](./docs-ref/LeviLamina/docs/main/docs.config.ts)
-- [LeviLamina API 文档](./docs-ref/LeviLamina/src*)
+- [LeviLamina 公开 API](./docs-ref/LeviLamina/src/ll/api)
+- [LeviLamina 服务端注入 API](./docs-ref/LeviLamina/src-server/ll/api)
+- [游戏内类型声明](./docs-ref/LeviLamina/src/mc)
+
+`docs-ref/` 不纳入版本管理，由 `./scripts/prepare-refs.ps1` 按 [scripts/references.lock.json](./scripts/references.lock.json) 固定的 commit 稀疏检出。
 
 ## 开发环境/工具链
 

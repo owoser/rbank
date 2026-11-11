@@ -1,0 +1,29 @@
+[
+  {
+    "id": "levilamina",
+    "dir": "LeviLamina",
+    "url": "https://github.com/LiteLDev/LeviLamina.git",
+    "commit": "97061b5ac1fa2c2caca5fbef1aa765625eff5f6b",
+    "label": "v26.60.5",
+    "paths": ["src", "src-server", "docs"],
+    "probe": "src/ll/api/service/Bedrock.h"
+  },
+  {
+    "id": "legacymoney",
+    "dir": "LegacyMoney",
+    "url": "https://github.com/LiteLDev/LegacyMoney.git",
+    "commit": "fc6acb03788592faecc8c2f68f172894134eb075",
+    "label": "v0.23.0",
+    "paths": ["src"],
+    "probe": "src/API.cpp"
+  },
+  {
+    "id": "bedd",
+    "dir": "BeDD",
+    "url": "https://github.com/LiteLDev/BeDD.git",
+    "commit": "17a47dc6a536989ff7b9e3a0695634d1c41008ca",
+    "label": "main",
+    "paths": ["docs", "src"],
+    "probe": "docs/docs.config.ts"
+  }
+]
