@@ -45,6 +45,8 @@ public:
     Result slots(std::string const& xuid);
     Result freeze(std::string const& card, bool frozen);
     Result setRate(std::string const& server, Amount value, std::string const& by);
+    Result setSlots(int count, std::string const& by);
+    Result setBaseUnit(std::string const& unit, std::string const& by);
     Result resolve(std::string const& intent, bool sourceConfirmed, std::string const& by);
     void   recover(Time grace = 60, Time offline = 300);
 };

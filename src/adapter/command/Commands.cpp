@@ -49,6 +49,9 @@ struct SlotParam {
     int count = 1;
 };
 
+struct BaseUnitParam {
+    std::string name;
+};
 
 namespace {
 
@@ -118,7 +121,10 @@ void registerCommands(std::shared_ptr<Application> const& app) {
     command.overload().execute([weak](CommandOrigin const& origin, CommandOutput& output) {
         auto user = player(origin);
         if (!user) {
-            output.success("rbank list <xuid> | hist <xuid> | slot <xuid> | rate | rate set <server> <amount>");
+            output.success(
+                "rbank list <xuid> | hist <xuid> | slot <xuid> | rate | rate set <server> <amount> | "
+                "slot set <count> | baseunit set <name>"
+            );
             return;
         }
 
@@ -269,7 +275,7 @@ void registerCommands(std::shared_ptr<Application> const& app) {
         );
     });
 
-    // 卡槽上限是热更配置，写入 config 表后下一次请求即生效。
+    // 卡槽上限与基准单位名都是热更配置，读改写一次 config 表后下一次请求即生效。
     command.overload<SlotParam>().text("slot").text("set").required("count").execute(
         [weak](CommandOrigin const& origin, CommandOutput& output, SlotParam const& p) {
             if (!operator_(origin, output)) {
@@ -281,24 +287,32 @@ void registerCommands(std::shared_ptr<Application> const& app) {
             }
 
             auto by = player(origin) ? player(origin)->getXuid() : std::string("console");
-            dispatch(weak, origin, output, [weak, count = p.count, by](Bank&) {
-                auto app = weak.lock();
-                require(app != nullptr, "UNAVAILABLE", "Bank is under maintenance");
-
-                auto session = app->store().open();
-                auto config  = session->config();
-                config.slots = count;
-
-                Transaction tx(*session);
-                session->putConfig(config, by);
-                tx.commit();
-
-                return Result::success({
-                    {"limit", count}
-                });
-            });
+            dispatch(weak, origin, output, [count = p.count, by](Bank& bank) { return bank.setSlots(count, by); });
         }
     );
+
+    command.overload<BaseUnitParam>()
+        .text("baseunit")
+        .text("set")
+        .required("name")
+        .execute([weak](CommandOrigin const& origin, CommandOutput& output, BaseUnitParam const& p) {
+            if (!operator_(origin, output)) {
+                return;
+            }
+
+            auto by = player(origin) ? player(origin)->getXuid() : std::string("console");
+            dispatch(weak, origin, output, [weak, unit = std::string(p.name), by](Bank& bank) {
+                auto result = bank.setBaseUnit(unit, by);
+                if (result.ok()) {
+                    // 本服缓存立刻跟上，其余节点在下一轮维护时收敛。
+                    if (auto app = weak.lock()) {
+                        app->setBaseUnit(unit);
+                    }
+                }
+
+                return result;
+            });
+        });
 
     for (auto action : {"list", "hist", "slot"}) {
         command.overload<TargetParam>().text(action).required("xuid").execute(

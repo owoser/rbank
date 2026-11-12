@@ -601,6 +601,36 @@ Result Bank::freeze(std::string const& no, bool frozen) {
     });
 }
 
+Result Bank::setSlots(int count, std::string const& by) {
+    require(count >= 1 && count <= 100, "CONFIG", "Slot limit must be between 1 and 100");
+
+    auto        s      = db.open();
+    auto        config = s->config();
+    Transaction tx(*s);
+    config.slots = count;
+    s->putConfig(config, by);
+    tx.commit();
+
+    return Result::success({
+        {"limit", count}
+    });
+}
+
+Result Bank::setBaseUnit(std::string const& unit, std::string const& by) {
+    requireBaseUnit(unit);
+
+    auto        s      = db.open();
+    auto        config = s->config();
+    Transaction tx(*s);
+    config.baseUnit = unit;
+    s->putConfig(config, by);
+    tx.commit();
+
+    return Result::success({
+        {"base_unit", unit}
+    });
+}
+
 Result Bank::setRate(std::string const& server, Amount value, std::string const& by) {
     require(value > 0, "RATE", "Rate must be a positive integer");
 

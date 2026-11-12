@@ -16,9 +16,9 @@
   "Deposit": "存款",
   "Withdraw": "取款",
   "Transfer": "转账",
-  "Amount (base)": "金额（base）",
-  "Balance {0} base": "余额 {0} base",
-  "[rbank] Rate for {0} is now {1} / base": "[rbank] {0} 汇率已调整为 {1} / base",
+  "Amount ({0})": "金额（{0}）",
+  "Balance {0} {1}": "余额 {0} {1}",
+  "[rbank] Rate for {0} is now {1} / {2}": "[rbank] {0} 汇率已调整为 {1} / {2}",
   "Amount out of range": "金额超出范围",
   "A verified player identity is required": "需要已认证的玩家身份",
   "Amount must be a positive integer": "金额必须为正整数",
@@ -137,8 +137,9 @@
   "Online": "在线",
   "Offline": "离线",
   "Cancel a card": "销卡",
-  "1 base = {0} {1}": "1 base = {0} {1}",
+  "1 {0} = {1} {2}": "1 {0} = {1} {2}",
   "Recipient player name": "收款玩家名称",
   "Recipient not found": "未找到该玩家",
-  "Automatic conversion": "自动换算为 base 单位"
+  "Automatic conversion": "自动换算为基准单位",
+  "Base unit name is invalid": "基准单位名称无效"
 }

@@ -16,9 +16,9 @@
   "Deposit": "存款",
   "Withdraw": "取款",
   "Transfer": "轉帳",
-  "Amount (base)": "金額（base）",
-  "Balance {0} base": "餘額 {0} base",
-  "[rbank] Rate for {0} is now {1} / base": "[rbank] {0} 匯率已調整為 {1} / base",
+  "Amount ({0})": "金額（{0}）",
+  "Balance {0} {1}": "餘額 {0} {1}",
+  "[rbank] Rate for {0} is now {1} / {2}": "[rbank] {0} 匯率已調整為 {1} / {2}",
   "Amount out of range": "金額超出範圍",
   "A verified player identity is required": "需要已驗證的玩家身分",
   "Amount must be a positive integer": "金額必須為正整數",
@@ -137,8 +137,9 @@
   "Offline": "離線",
   "Transfer tips": "三種方式選一種即可，輸入卡號、玩家ID或者直接選擇玩家。",
   "Cancel a card": "銷卡",
-  "1 base = {0} {1}": "1 base = {0} {1}",
+  "1 {0} = {1} {2}": "1 {0} = {1} {2}",
   "Recipient player name": "收款玩家名稱",
   "Recipient not found": "找不到該玩家",
-  "Automatic conversion": "自動換算為 base 單位"
+  "Automatic conversion": "自動換算為基準單位",
+  "Base unit name is invalid": "基準單位名稱無效"
 }

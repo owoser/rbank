@@ -27,8 +27,14 @@ namespace {
 using Step  = std::function<void(Player&)>;
 using Steps = std::vector<Step>;
 
-std::string balanceLabel(Amount balance, std::string_view locale) {
-    return translate({"Balance {0} base", {std::to_string(balance)}}, locale);
+std::string balanceLabel(Amount balance, std::string const& unit, std::string_view locale) {
+    return translate(
+        {
+            "Balance {0} {1}",
+            {std::to_string(balance), unit}
+    },
+        locale
+    );
 }
 
 std::string title(std::string const& action, std::string_view locale) {
@@ -41,11 +47,17 @@ std::string field(std::string_view name, std::string const& value, std::string_v
 }
 
 /// 余额与钱包始终成对出现在同一行，玩家一眼就能看出这次操作会动哪一边。
-std::string funds(Amount balance, Amount wallet, std::string const& unit, std::string_view locale) {
+std::string funds(
+    Amount             balance,
+    Amount             wallet,
+    std::string const& baseUnit,
+    std::string const& currency,
+    std::string_view   locale
+) {
     return translate(
         {
             "Balance: {0}, Wallet: {1}",
-            {std::to_string(balance) + " base", std::to_string(wallet) + " " + unit}
+            {std::to_string(balance) + " " + baseUnit, std::to_string(wallet) + " " + currency}
     },
         locale
     );
@@ -74,17 +86,17 @@ std::string group(std::string_view locale, std::vector<std::pair<std::string, st
     return text;
 }
 
-/// 汇率写成「1 base = 若干本服货币」，与玩家填金额的方向一致，举例时不必再换算。
-std::string rateLine(Amount rate, std::string const& unit, std::string_view locale) {
+/// 汇率写成「1 基准单位 = 若干本服货币」，与玩家填金额的方向一致，举例时不必再换算。
+std::string rateLine(Amount rate, std::string const& baseUnit, std::string const& currency, std::string_view locale) {
     return field(
         translate("Rate", locale),
-        fill(translate("1 base = {0} {1}", locale), {std::to_string(rate), unit}),
+        fill(translate("1 {0} = {1} {2}", locale), {baseUnit, std::to_string(rate), currency}),
         locale
     );
 }
 
 /// 只呈现玩家能核对的数字：单据 id 对玩家没有意义，原始键名和 JSON 也不该出现在界面上。
-std::string receipt(Result const& result, std::string const& currency, std::string_view locale) {
+std::string receipt(Result const& result, std::string const& base, std::string const& local, std::string_view locale) {
     auto amountLine = [&](std::string_view name, std::string const& unit, char const* key) {
         if (!result.data.contains(key)) {
             return std::string{};
@@ -95,10 +107,10 @@ std::string receipt(Result const& result, std::string const& currency, std::stri
 
     std::string text;
     for (auto const& line :
-         {amountLine("Received", "base", "credited_base"),
-          amountLine("Amount", currency, "local_amount"),
-          amountLine("Amount", "base", "base_amount"),
-          amountLine("Fee", "base", "fee_base")}) {
+         {amountLine("Received", base, "credited_base"),
+          amountLine("Amount", local, "local_amount"),
+          amountLine("Amount", base, "base_amount"),
+          amountLine("Fee", base, "fee_base")}) {
         if (line.empty()) {
             continue;
         }
@@ -305,7 +317,7 @@ void execute(
         [app, xuid](Result result) {
             playerByXuid(xuid, [&](Player& p) {
                 auto locale = p.getLocaleCode();
-                auto msg    = result.ok() ? receipt(result, app->config().node.currency, locale)
+                auto msg    = result.ok() ? receipt(result, app->baseUnit(), app->config().node.currency, locale)
                                             : translate(result.message, locale);
 
                 // 回执逐行给出，聊天栏只显示一行，因此把换行压成空格。
@@ -347,13 +359,14 @@ void cardList(std::shared_ptr<Application> const& app, Player& player) {
             ll::form::SimpleForm form(translate("Cross-server bank", locale));
             Steps                steps;
 
+            auto baseUnit = app->baseUnit();
             for (auto const& card : data.at("cards")) {
                 auto no      = card.at("card_no").get<std::string>();
                 auto balance = card.at("balance_base").get<Amount>();
                 button(
                     form,
                     steps,
-                    no + "\n" + balanceLabel(balance, locale),
+                    no + "\n" + balanceLabel(balance, baseUnit, locale),
                     [app, no](Player& player) { cardInfo(app, player, no); },
                     icons.cards
                 );
@@ -392,12 +405,13 @@ void cardInfo(std::shared_ptr<Application> const& app, Player& player, std::stri
             return info;
         },
         [app, no](Player& p, Json const& data) {
-            auto locale  = p.getLocaleCode();
-            auto unit    = app->config().node.currency;
-            auto wallet  = data.contains("wallet_local") && data.at("wallet_local").is_number()
-                             ? std::to_string(data.at("wallet_local").get<Amount>()) + " " + unit
-                             : translate("Unavailable", locale);
-            auto balance = std::to_string(data.value("balance_base", Amount{})) + " base";
+            auto locale   = p.getLocaleCode();
+            auto unit     = app->config().node.currency;
+            auto baseUnit = app->baseUnit();
+            auto wallet   = data.contains("wallet_local") && data.at("wallet_local").is_number()
+                              ? std::to_string(data.at("wallet_local").get<Amount>()) + " " + unit
+                              : translate("Unavailable", locale);
+            auto balance  = std::to_string(data.value("balance_base", Amount{})) + " " + baseUnit;
 
             ll::form::SimpleForm form(translate(
                 {
@@ -482,17 +496,22 @@ void cashForm(std::shared_ptr<Application> const& app, Player& player, std::stri
             return info;
         },
         [app, no, action](Player& p, Json const& data) {
-            auto locale = p.getLocaleCode();
-            auto unit   = app->config().node.currency;
-            auto rate   = data.value("rate", Amount{});
-            auto key    = app->requestKey();
+            auto locale   = p.getLocaleCode();
+            auto unit     = app->config().node.currency;
+            auto baseUnit = app->baseUnit();
+            auto rate     = data.value("rate", Amount{});
+            auto key      = app->requestKey();
 
             ll::form::CustomForm form(title(action, locale));
-            form.appendLabel(
-                funds(data.value("balance_base", Amount{}), data.value("wallet_local", Amount{}), unit, locale)
-            );
+            form.appendLabel(funds(
+                data.value("balance_base", Amount{}),
+                data.value("wallet_local", Amount{}),
+                baseUnit,
+                unit,
+                locale
+            ));
             if (rate > 0) {
-                form.appendLabel(rateLine(rate, unit, locale));
+                form.appendLabel(rateLine(rate, baseUnit, unit, locale));
             }
 
             form.appendDivider();
@@ -529,7 +548,7 @@ void cashForm(std::shared_ptr<Application> const& app, Player& player, std::stri
                         return;
                     }
 
-                    // 输入 base 时需要折回本服货币再下单：存款与取款都以本服货币计价。
+                    // 按基准单位输入时要折回本服货币再下单：存款与取款都以本服货币计价。
                     auto baseInput = flag(result, "base");
                     auto local     = value;
                     if (baseInput) {
@@ -582,15 +601,19 @@ void cashConfirm(
     std::string                         key
 ) {
     auto locale = player.getLocaleCode();
+    auto unit   = app->config().node.currency;
+    auto base   = app->baseUnit();
 
-    auto base = [&](Json const& data, char const* key) { return std::to_string(data.value(key, Amount{})) + " base"; };
+    auto show = [&](Json const& data, char const* key) {
+        return std::to_string(data.value(key, Amount{})) + " " + base;
+    };
     auto wallet = [&](Json const& data, char const* key) {
-        return std::to_string(data.value(key, Amount{})) + " " + app->config().node.currency;
+        return std::to_string(data.value(key, Amount{})) + " " + unit;
     };
 
-    // 玩家可能按 base 输入，确认框仍按他选择的单位复述，避免换算后对不上号。
-    auto amount = baseInput ? std::to_string(local / quote.data.value("rate", Amount{1})) + " base"
-                            : std::to_string(local) + " " + app->config().node.currency;
+    // 玩家可能按基准单位输入，确认框仍按他选择的单位复述，避免换算后对不上号。
+    auto amount = baseInput ? std::to_string(local / quote.data.value("rate", Amount{1})) + " " + base
+                            : std::to_string(local) + " " + unit;
 
     ll::form::ModalForm form(
         title(action, locale),
@@ -600,11 +623,11 @@ void cashConfirm(
                 {translate("Amount", locale), amount},
                 {translate("Rate", locale),
                  fill(
-                     translate("1 base = {0} {1}", locale),
-                 {std::to_string(quote.data.value("rate", Amount{})), app->config().node.currency}
+                     translate("1 {0} = {1} {2}", locale),
+                 {base, std::to_string(quote.data.value("rate", Amount{})), unit}
                  )},
                 {translate("Card balance", locale),
-                 base(before, "balance_base") + " > " + base(quote.data, "balance_base")},
+                 show(before, "balance_base") + " > " + show(quote.data, "balance_base")},
                 {translate("Wallet", locale),
                  wallet(before, "wallet_local") + " > " + wallet(quote.data, "wallet_local")},
     }
@@ -636,13 +659,14 @@ void transferForm(std::shared_ptr<Application> const& app, Player& player, std::
     auto locale = player.getLocaleCode();
     auto key    = app->requestKey();
     auto people = choices(locale);
+    auto unit   = app->baseUnit();
 
     ll::form::CustomForm form(translate("Transfer", locale));
     form.appendInput("card", translate("Recipient card number", locale));
     form.appendInput("player", translate("Recipient player name", locale));
     form.appendDropdown("pick", translate("Select a player", locale), people.options);
     form.appendLabel(translate("Transfer tips", locale));
-    form.appendInput("amount", translate("Amount (base)", locale));
+    form.appendInput("amount", fill(translate("Amount ({0})", locale), {unit}));
     form.setSubmitButton(translate("Submit", locale));
 
     form.sendTo(
@@ -719,6 +743,7 @@ void historyForm(std::shared_ptr<Application> const& app, Player& player, std::s
         [xuid](Bank& bank) { return bank.history(xuid, 5); },
         [app, no](Player& p, Json const& data) {
             auto locale = p.getLocaleCode();
+            auto unit   = app->baseUnit();
 
             ll::form::SimpleForm     form(translate("History", locale));
             std::vector<std::string> blocks;
@@ -726,14 +751,14 @@ void historyForm(std::shared_ptr<Application> const& app, Player& player, std::s
                 blocks.push_back(group(
                     locale,
                     {
-                        {translate("Kind",          locale), entry.value("kind",                    std::string{})      },
-                        {translate("Change",        locale), signedAmount(entry.value("delta_base", Amount{})) + " base"},
-                        {translate("Fee",           locale), std::to_string(entry.value("fee_base", Amount{})) + " base"},
+                        {translate("Kind",          locale), entry.value("kind",                    std::string{})         },
+                        {translate("Change",        locale), signedAmount(entry.value("delta_base", Amount{})) + " " + unit},
+                        {translate("Fee",           locale), std::to_string(entry.value("fee_base", Amount{})) + " " + unit},
                         {translate("Balance after", locale),
-                         std::to_string(entry.value("balance_after",                                Amount{})) + " base"},
-                        {translate("Rate",          locale), std::to_string(entry.value("rate",     Amount{}))          },
-                        {translate("Server",        locale), entry.value("server_id",               std::string{})      },
-                        {translate("Time",          locale), stamp(entry.value("created_at",        Time{}))            }
+                         std::to_string(entry.value("balance_after",                                Amount{})) + " " + unit},
+                        {translate("Rate",          locale), std::to_string(entry.value("rate",     Amount{}))             },
+                        {translate("Server",        locale), entry.value("server_id",               std::string{})         },
+                        {translate("Time",          locale), stamp(entry.value("created_at",        Time{}))               }
                 }
                 ));
             }
@@ -821,6 +846,7 @@ void onJoin(std::shared_ptr<Application> const& app, Player& p) {
 
             ll::form::SimpleForm form(translate("Cross-server bank", locale));
 
+            auto unit  = app->baseUnit();
             auto cards = r.data.value("cards", Json::array());
             if (cards.empty()) {
                 form.setContent(translate("No bank card opened yet", locale));
@@ -830,9 +856,9 @@ void onJoin(std::shared_ptr<Application> const& app, Player& p) {
                     blocks.push_back(group(
                         locale,
                         {
-                            {translate("Card number",  locale), card.value("card_no", std::string{})      },
+                            {translate("Card number",  locale), card.value("card_no", std::string{})         },
                             {translate("Card balance", locale),
-                             std::to_string(card.value("balance_base",                Amount{})) + " base"}
+                             std::to_string(card.value("balance_base",                Amount{})) + " " + unit}
                     }
                     ));
                 }
@@ -846,9 +872,10 @@ void onJoin(std::shared_ptr<Application> const& app, Player& p) {
                     blocks.push_back(group(
                         locale,
                         {
-                            {translate("Kind",   locale), entry.value("kind",                    std::string{})      },
-                            {translate("Change", locale), signedAmount(entry.value("delta_base", Amount{})) + " base"},
-                            {translate("Time",   locale), stamp(entry.value("created_at",        Time{}))            }
+                            {translate("Kind",   locale), entry.value("kind",             std::string{})         },
+                            {translate("Change", locale),
+                             signedAmount(entry.value("delta_base",                       Amount{})) + " " + unit},
+                            {translate("Time",   locale), stamp(entry.value("created_at", Time{}))               }
                     }
                     ));
                 }

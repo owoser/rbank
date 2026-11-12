@@ -52,6 +52,8 @@ Result writeConfig(Application& app, std::string const& body) {
     s->putConfig(hot, "http-admin");
     tx.commit();
 
+    app.setBaseUnit(hot.baseUnit);
+
     return Result::success(bootstrap::hotJson(hot));
 }
 

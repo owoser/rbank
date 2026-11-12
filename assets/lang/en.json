@@ -16,9 +16,9 @@
   "Deposit": "Deposit",
   "Withdraw": "Withdraw",
   "Transfer": "Transfer",
-  "Amount (base)": "Amount (base)",
-  "Balance {0} base": "Balance {0} base",
-  "[rbank] Rate for {0} is now {1} / base": "[rbank] Rate for {0} is now {1} / base",
+  "Amount ({0})": "Amount ({0})",
+  "Balance {0} {1}": "Balance {0} {1}",
+  "[rbank] Rate for {0} is now {1} / {2}": "[rbank] Rate for {0} is now {1} / {2}",
   "Amount out of range": "Amount out of range",
   "A verified player identity is required": "A verified player identity is required",
   "Amount must be a positive integer": "Amount must be a positive integer",
@@ -137,8 +137,9 @@
   "Offline": "offline",
   "Transfer tips": "Enter a card number or player ID, or pick a player; any one of the three is enough.",
   "Cancel a card": "Cancel a card",
-  "1 base = {0} {1}": "1 base = {0} {1}",
+  "1 {0} = {1} {2}": "1 {0} = {1} {2}",
   "Recipient player name": "Recipient player name",
   "Recipient not found": "Recipient not found",
-  "Automatic conversion": "Automatic conversion to base units"
+  "Automatic conversion": "Enter in base units",
+  "Base unit name is invalid": "Base unit name is invalid"
 }

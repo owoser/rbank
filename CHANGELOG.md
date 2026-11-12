@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 游玩端表单（卡片面板、存取款、开卡）、`/rbank` 命令树、可选 HTTP 管理 API。
 - 节点登记与心跳、汇率表（含生效时间）、原版经济审计表。
 - 按编号的迁移目录：`schema_version` 记录已应用脚本，升级时只跑新增的部分。
-- 热配置存于数据库 `config` 表，秒级生效，无需重启。
+- 热配置存于数据库 `config` 表，秒级生效，无需重启；其中基准单位显示名（`base_unit`，默认 `Base`）可通过 `PUT /v1/config` 或 `/rbank baseunit set` 修改，只影响界面文案与流水单位，不改换算精度。
 - 多语言：界面文案随玩家语言呈现，随插件分发 `lang/en.json`、`lang/zh_CN.json`、`lang/zh_TW.json`；缺失语言回落英文，HTTP 管理接口固定返回英文。
 - 两级自检：纯规则用例，以及连真实 MySQL 的集成用例（含并发、恢复、幂等、限额）。
 - 依赖准备：`scripts/dependencies.lock.json` 锁定版本与 SHA256，`scripts/prepare-deps.ps1` 下载、校验并落地到 `build/deps`，导入库按当前工具链本地生成；`build-local.ps1` / `test-local.ps1` 启动前先做完整性校验。

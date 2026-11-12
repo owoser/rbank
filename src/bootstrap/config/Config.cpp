@@ -91,6 +91,7 @@ bool identifier(std::string const& s) {
 Json hotJson(core::HotConfig const& c) {
     return {
         {"slots",           c.slots            },
+        {"base_unit",       c.baseUnit         },
         {"deposit_fee",     feeJson(c.deposit) },
         {"cross_fee",       feeJson(c.cross)   },
         {"transfer_fee",    feeJson(c.transfer)},
@@ -114,6 +115,7 @@ core::HotConfig hotConfig(Json const& j) {
 
     core::HotConfig c;
     c.slots       = j.at("slots");
+    c.baseUnit    = j.value("base_unit", c.baseUnit);
     c.deposit     = readFee(j.at("deposit_fee"));
     c.cross       = readFee(j.at("cross_fee"));
     c.transfer    = readFee(j.at("transfer_fee"));
@@ -129,6 +131,8 @@ core::HotConfig hotConfig(Json const& j) {
         "CONFIG",
         "Slot or limit configuration is invalid"
     );
+    // 单位名直接进玩家界面，只允许单行短文本；空串会渲染成「金额 」，不如直接拒绝。
+    core::requireBaseUnit(c.baseUnit);
 
     return c;
 }

@@ -146,6 +146,11 @@ void Application::maintain() {
     }
     s->heartbeat(node);
 
+    {
+        std::lock_guard lock(unitMutex);
+        unit = s->config().baseUnit;
+    }
+
     std::deque<AuditRecord> batch;
     {
         std::lock_guard lock(auditMutex);
@@ -183,19 +188,20 @@ void Application::pollRates() {
         auto running = active;
         auto server  = rate.server;
         auto value   = rate.value;
-        ll::thread::ServerThreadExecutor::getDefault().execute([running, server, value] {
+        ll::thread::ServerThreadExecutor::getDefault().execute([this, running, server, value] {
             if (!running->load()) {
                 return;
             }
 
+            auto unit  = baseUnit();
             auto level = ll::service::getLevel();
             if (level) {
                 level->forEachPlayer([&](Player& player) {
                     player.sendMessage(
                         adapter::translate(
                             {
-                                "[rbank] Rate for {0} is now {1} / base",
-                                {server, std::to_string(value)}
+                                "[rbank] Rate for {0} is now {1} / {2}",
+                                {server, std::to_string(value), unit}
                     },
                             player.getLocaleCode()
                         )

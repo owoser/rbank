@@ -14,6 +14,8 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <thread>
 
 namespace rbank {
@@ -48,6 +50,10 @@ class Application {
     std::map<std::string, core::Amount> lastBalances;
     proto::RateBroadcast                rates;
 
+    /// 基准单位名是热配置里的展示名，界面只在主线程读，缓存避免为一行文字开事务。
+    mutable std::mutex unitMutex;
+    std::string        unit = "Base";
+
     bool     registered = false;
     unsigned failures   = 0;
 
@@ -69,6 +75,18 @@ public:
     bootstrap::StartupConfig const& config() const { return cfg; }
     core::UnitOfWork&               store() { return database; }
     core::Bank&                     services() { return bank; }
+
+    std::string baseUnit() const {
+        std::lock_guard lock(unitMutex);
+
+        return unit;
+    }
+
+    /// 写入成功后立即刷新缓存，不让运维等下一轮维护。
+    void setBaseUnit(std::string name) {
+        std::lock_guard lock(unitMutex);
+        unit = std::move(name);
+    }
 };
 
 } // namespace rbank

@@ -48,7 +48,7 @@
    - `http.enabled` 打开内置管理 API 时必须提供至少 32 字符的 `token`。
 3. 重启服务器，插件会在工作线程执行 `schema/migrations/*.sql` 建表与升级。
 
-热配置（卡槽数、费率、限额、功能开关）存放在数据库 `config` 表，改完即时生效，无需重启。
+热配置（卡槽数、基准单位显示名、费率、限额、功能开关）存放在数据库 `config` 表，改完即时生效，无需重启。
 
 ## 命令
 
@@ -72,27 +72,15 @@
 /rbank freeze|unfreeze <卡号>
 /rbank rate                          查看各服汇率
 /rbank rate set <server_id> <rate>   设置汇率（本服货币 / 1 base）
-/rbank slot set <1-100>
+/rbank slot set <1-100>              设置卡槽上限
+/rbank baseunit set <名称>           设置基准单位显示名（1–24 字符，单行）
 ```
 
-金额一律是 base 单位：本服货币金额必须是本服汇率的整数倍，否则拒绝（不会静默截断）。
+金额一律以基准单位（base）记账：本服货币金额必须是本服汇率的整数倍，否则拒绝（不会静默截断）。基准单位的显示名可改，默认 `Base`，只改界面文案，不改换算比例。
 
-## 管理 HTTP API
+## API 接口文档
 
-`http.enabled` 为真时监听 `http.host:port`，所有请求需带 `Authorization: Bearer <token>`。
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/v1/cards/{xuid}` | 玩家的卡列表 |
-| GET | `/v1/ledger/{xuid}` | 最近 100 条流水 |
-| GET | `/v1/nodes` | 节点与心跳 |
-| GET | `/v1/rates` | 各服生效汇率 |
-| GET | `/v1/config` | 当前热配置 |
-| GET | `/v1/intents/{id}` | 单据状态 |
-| PUT | `/v1/config` | 写入热配置 |
-| POST | `/v1/cards/{card_no}/freeze` | `{"frozen": true}` |
-| POST | `/v1/rates` | `{"server_id": "...", "rate": 1}` |
-| POST | `/v1/intents/{id}/resolve` | `{"legacy_applied": true}`，处理 ORPHAN 单据 |
+内置管理接口默认关闭，更多详细见[接口文档](./docs/接口文档.md)。
 
 ## 资金一致性
 

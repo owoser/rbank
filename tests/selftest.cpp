@@ -148,6 +148,33 @@ int main() {
         "slot overflow rejected"
     );
 
+    // 基准单位显示名可热更，但必须是单行短文本；省略时沿用默认名。
+    {
+        auto renamed         = json;
+        renamed["base_unit"] = "Coin";
+        check(rbank::bootstrap::hotConfig(renamed).baseUnit == "Coin", "base unit round trip");
+        check(
+            rbank::bootstrap::hotConfig(rbank::bootstrap::hotJson(HotConfig{})).baseUnit == "Base",
+            "base unit default"
+        );
+    }
+    check(
+        code([&] {
+            auto bad         = json;
+            bad["base_unit"] = "";
+            rbank::bootstrap::hotConfig(bad);
+        }) == "CONFIG",
+        "empty base unit rejected"
+    );
+    check(
+        code([&] {
+            auto bad         = json;
+            bad["base_unit"] = "a\nb";
+            rbank::bootstrap::hotConfig(bad);
+        }) == "CONFIG",
+        "multi-line base unit rejected"
+    );
+
     // 汇率广播：首次静默，之后只报变化。
     rbank::proto::RateBroadcast broadcast;
     std::vector<Rate>           initial{

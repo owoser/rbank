@@ -120,18 +120,28 @@ struct Fee {
     Amount fixed = 0;
 };
 
+/// 基准单位名会直接进玩家界面：非空、不超过 24 字节、不含换行制表符。
+inline void requireBaseUnit(std::string const& unit) {
+    require(
+        !unit.empty() && unit.size() <= 24 && unit.find_first_of("\r\n\t") == std::string::npos,
+        "CONFIG",
+        "Base unit name is invalid"
+    );
+}
+
 struct HotConfig {
-    int    slots = 1;
-    Fee    deposit;
-    Fee    cross;
-    Fee    transfer;
-    Amount maxSingle   = 1'000'000'000;
-    Amount maxDaily    = 10'000'000'000;
-    bool   enabled     = true;
-    bool   deposits    = true;
-    bool   withdrawals = true;
-    bool   transfers   = true;
-    bool   joinForm    = true;
+    int         slots    = 1;
+    std::string baseUnit = "Base";
+    Fee         deposit;
+    Fee         cross;
+    Fee         transfer;
+    Amount      maxSingle   = 1'000'000'000;
+    Amount      maxDaily    = 10'000'000'000;
+    bool        enabled     = true;
+    bool        deposits    = true;
+    bool        withdrawals = true;
+    bool        transfers   = true;
+    bool        joinForm    = true;
 };
 
 struct Node {
