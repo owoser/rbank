@@ -159,6 +159,17 @@ Result Bank::info(std::string const& xuid, std::string const& no) {
     });
 }
 
+Result Bank::cash(std::string const& xuid) {
+    identity(xuid);
+
+    auto amount = money.get(xuid);
+    require(amount && *amount >= 0, "LEGACY", "Legacy economy unavailable");
+
+    return Result::success({
+        {"amount", *amount}
+    });
+}
+
 Result Bank::history(std::string const& xuid, int count) {
     identity(xuid);
 
@@ -177,6 +188,65 @@ Result Bank::history(std::string const& xuid, int count) {
     }
 
     return Result::success(std::move(data));
+}
+
+/// 预览与下单走同一套校验，确认框里显示的余额就是下单后卡上会有的余额；
+/// 预览不写库，因此两次之间余额被他处改动时，下单仍会按最新状态重新校验。
+Result Bank::quote(std::string const& xuid, std::string const& no, Amount local, Direction dir) {
+    auto s   = db.open({xuid});
+    auto cfg = s->config();
+    ready(*s, xuid);
+    require(
+        dir == Direction::Deposit ? cfg.deposits : cfg.withdrawals,
+        "DISABLED",
+        dir == Direction::Deposit ? "Deposits are temporarily unavailable" : "Withdrawals are temporarily unavailable"
+    );
+
+    auto c    = owned(*s, xuid, no);
+    auto r    = rate(*s);
+    auto base = FeePolicy::convert(local, r);
+    limits(*s, cfg, xuid, dir, base);
+
+    auto lots = s->lots(c.no);
+    verify(c, lots);
+
+    auto wallet = money.get(xuid);
+    require(wallet && *wallet >= 0, "LEGACY", "Legacy economy unavailable");
+
+    Amount balance{};
+    Amount cash{};
+    if (dir == Direction::Deposit) {
+        auto fee = FeePolicy::calculate(base, cfg.deposit);
+        require(fee < base, "FEE", "Fee exceeds the principal");
+        require(*wallet >= local, "LEGACY_BALANCE", "Insufficient local balance or economy unavailable");
+
+        balance = plus(c.balance, base - fee);
+        cash    = *wallet - local;
+    } else {
+        // 取款手续费取决于批次来源，必须复用 withdrawPlan，否则预览与实际扣款不一致。
+        auto plan  = withdrawPlan(lots, base, node.id, cfg.cross);
+        auto total = plus(base, plan.fee);
+        require(c.balance >= total, "BALANCE", "Insufficient card balance");
+        fits(*wallet, local);
+
+        balance = c.balance - total;
+        cash    = plus(*wallet, local);
+    }
+
+    return Result::success({
+        {"balance_base", balance},
+        {"wallet_local", cash   },
+        {"rate",         r      }
+    });
+}
+
+Result Bank::localRate() {
+    auto s = db.open();
+
+    return Result::success({
+        {"rate", rate(*s)     },
+        {"unit", node.currency}
+    });
 }
 
 void Bank::settleDeposit(Session& s, Intent const& i, State from, std::string const& note) {
@@ -479,8 +549,9 @@ Result Bank::pay(PayRequest const& q) {
     tx.commit();
 
     return Result::success({
-        {"intent_id", i.id},
-        {"fee_base",  fee }
+        {"intent_id",   i.id  },
+        {"base_amount", q.base},
+        {"fee_base",    fee   }
     });
 }
 

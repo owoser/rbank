@@ -34,7 +34,10 @@ public:
     Result close(std::string const& xuid, std::string const& card);
     Result list(std::string const& xuid);
     Result info(std::string const& xuid, std::string const& card);
+    Result cash(std::string const& xuid);
     Result history(std::string const& xuid, int count = 10);
+    Result quote(std::string const& xuid, std::string const& card, Amount local, Direction dir);
+    Result localRate();
     Result deposit(CashRequest const&);
     Result withdraw(CashRequest const&);
     Result pay(PayRequest const&);

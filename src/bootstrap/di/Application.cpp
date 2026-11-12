@@ -265,11 +265,11 @@ void Application::join(std::string const& xuid, Reply reply) {
 
             auto cards   = b.list(xuid);
             auto history = b.history(xuid, 3);
-            for (auto const& entry : history.data) {
-                cards.data.push_back(entry);
-            }
 
-            return cards;
+            return Result::success({
+                {"cards",   cards.ok() ? std::move(cards.data) : core::Json::array()},
+                {"history", std::move(history.data)                                 }
+            });
         },
         std::move(reply)
     );

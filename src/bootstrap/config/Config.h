@@ -24,6 +24,25 @@ struct HttpConfig {
     std::string token;
 };
 
+/// 按钮图标：值是原版材质路径或 URL，type 取 path / url，留空表示不画图标。
+struct IconConfig {
+    std::string data;
+    std::string type = "path";
+};
+
+/// 每个菜单按钮一个键，运维改这里就能换图；键名与代码里的按钮一一对应。
+struct IconTable {
+    IconConfig cards;
+    IconConfig open;
+    IconConfig deposit;
+    IconConfig withdraw;
+    IconConfig transfer;
+    IconConfig history;
+    IconConfig closeCard;
+    IconConfig back;
+    IconConfig close;
+};
+
 /// config/config.json：只在启动时读取，修改需重启。
 struct StartupConfig {
     core::Node node{"server-a", "Server A", "Coin"};
@@ -37,6 +56,7 @@ struct StartupConfig {
     } database;
     CardConfig card;
     HttpConfig http;
+    IconTable  icons;
     int        workers = 4;
     int        queue   = 128;
 };

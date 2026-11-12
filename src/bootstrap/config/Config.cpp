@@ -30,6 +30,28 @@ core::Fee readFee(Json const& j) {
     return f;
 }
 
+/// 默认图标全部取自原版材质，运维换成自己的贴图只需改 data。
+Json iconDefaults() {
+    auto icon = [](char const* path) {
+        return Json{
+            {"data", path  },
+            {"type", "path"}
+        };
+    };
+
+    return {
+        {"cards",      icon("textures/ui/icon_best3")    },
+        {"open",       icon("textures/ui/color_plus")    },
+        {"deposit",    icon("textures/ui/backup_replace")},
+        {"withdraw",   icon("textures/ui/share_apple")   },
+        {"transfer",   icon("textures/ui/trade_icon")    },
+        {"history",    icon("textures/ui/creative_icon") },
+        {"close_card", icon("textures/ui/icon_trash")    },
+        {"back",       icon("textures/ui/icon_import")   },
+        {"close",      icon("textures/ui/crossout")      }
+    };
+}
+
 Json defaults() {
     return {
         {"server_id",   "server-a"                                                                },
@@ -53,6 +75,7 @@ Json defaults() {
           {"server_code", "A1"},
           {"checksum", "NONE"}}                                                                   },
         {"http",        {{"enabled", false}, {"host", "127.0.0.1"}, {"port", 8089}, {"token", ""}}},
+        {"icons",       iconDefaults()                                                            },
         {"workers",     4                                                                         },
         {"queue",       128                                                                       }
     };
@@ -152,8 +175,30 @@ bool loadConfig(std::filesystem::path const& path, StartupConfig& c) {
     c.http.host    = h.at("host");
     c.http.port    = h.at("port");
     c.http.token   = h.at("token");
-    c.workers      = j.value("workers", 4);
-    c.queue        = j.value("queue", 128);
+
+    // 图标表可整体省略；缺哪个键就沿用默认图，不让少写一行就起不来。
+    auto icons = j.value("icons", Json::object());
+    auto read  = [&](char const* key, IconConfig& out) {
+        auto const& at = icons.find(key);
+        if (at == icons.end() || !at->is_object()) {
+            return;
+        }
+
+        out.data = at->value("data", out.data);
+        out.type = at->value("type", "path");
+    };
+    read("cards", c.icons.cards);
+    read("open", c.icons.open);
+    read("deposit", c.icons.deposit);
+    read("withdraw", c.icons.withdraw);
+    read("transfer", c.icons.transfer);
+    read("history", c.icons.history);
+    read("close_card", c.icons.closeCard);
+    read("back", c.icons.back);
+    read("close", c.icons.close);
+
+    c.workers = j.value("workers", 4);
+    c.queue   = j.value("queue", 128);
 
     core::require(
         identifier(c.node.id) && identifier(c.database.database),
