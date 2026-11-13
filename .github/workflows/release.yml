@@ -1,16 +1,26 @@
 on:
+  push:
+    tags:
+      - 'v*'
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and publish, e.g. v0.1.0-beta.1'
+        required: true
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  publish:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
 
       - uses: actions/cache@v6
         with:
@@ -26,6 +36,18 @@ jobs:
           restore-keys: |
             rbank-deps-
 
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.event.release.tag_name }}${{ inputs.tag }}'
+          if (-not $tag) { $tag = '${{ github.ref_name }}' }
+          if ($tag -notmatch '^v?\d+\.\d+\.\d+') { throw "Not a release tag: $tag" }
+          $version = $tag -replace '^v', ''
+          $prerelease = if ($version -match '-') { 'true' } else { 'false' }
+          "RBANK_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RBANK_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RBANK_PRERELEASE=$prerelease" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Prepare dependencies
         shell: pwsh
         run: ./scripts/prepare-deps.ps1
@@ -38,48 +60,27 @@ jobs:
         shell: pwsh
         run: ./scripts/build-local.ps1
 
-      - name: Stage package
+      - name: Package
         shell: pwsh
         run: |
-          $stage = 'build/package/rbank'
-          New-Item -ItemType Directory -Force $stage | Out-Null
-          Copy-Item -Path build/rbank/* -Destination $stage -Recurse -Force
-          $version = '${{ github.event.release.tag_name }}' -replace '^v', ''
-          $manifest = Get-Content -LiteralPath (Join-Path $stage 'manifest.json') -Raw | ConvertFrom-Json
-          $manifest.version = $version
-          [IO.File]::WriteAllText((Join-Path $stage 'manifest.json'), (ConvertTo-Json -InputObject $manifest -Depth 5))
-          Copy-Item CHANGELOG.md, LICENSE, README.md -Destination (Join-Path $stage '..') -Force
+          $manifestPath = 'build/rbank/manifest.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $manifest.version = $env:RBANK_VERSION
+          [IO.File]::WriteAllText($manifestPath, (ConvertTo-Json -InputObject $manifest -Depth 5))
+          Remove-Item -LiteralPath rbank-windows-x64.zip -ErrorAction SilentlyContinue
+          Compress-Archive -LiteralPath build/rbank -DestinationPath rbank-windows-x64.zip -Force
 
-      - name: Archive
-        shell: pwsh
-        run: Compress-Archive -Path build/package/* -DestinationPath rbank-windows-x64.zip -Force
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rbank-windows-x64
-          path: rbank-windows-x64.zip
-          if-no-files-found: error
-
-  publish:
-    needs:
-      - build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - id: notes
+      - name: Extract release notes
+        id: notes
         uses: ffurrer2/extract-release-notes@v3
         with:
           changelog_file: CHANGELOG.md
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: rbank-windows-x64
-          path: dist
-
       - uses: softprops/action-gh-release@v3
         with:
-          body: |
-            ${{ steps.notes.outputs.release_notes }}
-          files: |
-            dist/rbank-windows-x64.zip
+          tag_name: ${{ env.RBANK_TAG }}
+          name: ${{ env.RBANK_TAG }}
+          prerelease: ${{ env.RBANK_PRERELEASE == 'true' }}
+          body: ${{ steps.notes.outputs.release_notes }}
+          files: rbank-windows-x64.zip
+          fail_on_unmatched_files: true
