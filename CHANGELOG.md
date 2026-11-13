@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-11-13
+
+首个测试版本，功能完整但尚未在生产环境验证。
+
 ### Added
 
 - 跨服银行卡：开卡、删卡、冻结、卡槽上限，卡号规则由 `config.json` 的字段 DSL 描述（服务码 / 随机 / XUID 哈希 / 序列，可选 Luhn 校验）。
