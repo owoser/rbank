@@ -1,47 +1,82 @@
 on:
   pull_request:
   push:
+    branches:
+      - main
   workflow_dispatch:
-  
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  lint:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        target_type:
-          - server
-          - client
     steps:
       - uses: actions/checkout@v7
 
-      - uses: xmake-io/github-action-setup-xmake@v1
-        # with:
-        #   xmake-version: branch@master
-      
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
       - uses: actions/cache@v6
         with:
-          path: |
-            ~/AppData/Local/.xmake
-          key: xmake-${{ hashFiles('xmake.lua') }}
+          path: .tools
+          key: rbank-tools-${{ hashFiles('scripts/tool-environment.ps1', 'scripts/prepare-tools.ps1') }}
           restore-keys: |
-            xmake-
+            rbank-tools-
 
-      - name: Setup LLVM
-        uses: ZhongRuoyu/setup-llvm@v0
+      - name: Prepare tools
+        shell: pwsh
+        run: |
+          $tools = ./scripts/prepare-tools.ps1 -PassThru
+          "RBANK_FORMATTER=$($tools.formatter)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Check language packs
+        run: python -I scripts/check-lang.py
+
+      - name: Check formatting
+        shell: pwsh
+        run: |
+          $sources = @(git ls-files 'src/*.cpp' 'src/*.h' 'tests/*.cpp')
+          & $env:RBANK_FORMATTER --dry-run --Werror -style=file @sources
+          if ($LASTEXITCODE) { throw 'Source is not clang-format clean.' }
+
+  build:
+    needs:
+      - lint
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
         with:
-          llvm-version: 22
+          path: .tools
+          key: rbank-tools-${{ hashFiles('scripts/tool-environment.ps1', 'scripts/prepare-tools.ps1') }}
+          restore-keys: |
+            rbank-tools-
 
-      - run: |
-          xmake repo -u
+      - uses: actions/cache@v6
+        with:
+          path: build/deps
+          key: rbank-deps-${{ hashFiles('scripts/dependencies.lock.json') }}-${{ runner.os }}
+          restore-keys: |
+            rbank-deps-
 
-      - run: |
-          xmake f -a x64 -m release -p windows -v --target_type=${{ matrix.target_type }} -y
+      - name: Prepare dependencies
+        shell: pwsh
+        run: ./scripts/prepare-deps.ps1
 
-      - run: |
-          xmake -v -y
+      - name: Test
+        shell: pwsh
+        run: ./scripts/test-local.ps1
+
+      - name: Build
+        shell: pwsh
+        run: ./scripts/build-local.ps1
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.event.repository.name }}-${{ github.sha }}-${{ matrix.target_type }}-windows-x64
-          path: |
-            bin/
+          name: rbank-${{ github.sha }}-windows-x64
+          path: build/rbank/
+          if-no-files-found: error

@@ -2,93 +2,84 @@ on:
   release:
     types:
       - published
-  
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        target_type:
-          - server
-          - client
     steps:
       - uses: actions/checkout@v7
 
-      - uses: xmake-io/github-action-setup-xmake@v1
-        # with:
-        #   xmake-version: branch@master
+      - uses: actions/cache@v6
+        with:
+          path: .tools
+          key: rbank-tools-${{ hashFiles('scripts/tool-environment.ps1', 'scripts/prepare-tools.ps1') }}
+          restore-keys: |
+            rbank-tools-
 
       - uses: actions/cache@v6
         with:
-          path: |
-            ~/AppData/Local/.xmake
-          key: xmake-${{ hashFiles('xmake.lua') }}
+          path: build/deps
+          key: rbank-deps-${{ hashFiles('scripts/dependencies.lock.json') }}-${{ runner.os }}
           restore-keys: |
-            xmake-
+            rbank-deps-
 
-      - name: Setup LLVM
-        uses: ZhongRuoyu/setup-llvm@v0
-        with:
-          llvm-version: 22
+      - name: Prepare dependencies
+        shell: pwsh
+        run: ./scripts/prepare-deps.ps1
 
-      - run: |
-          xmake repo -u
+      - name: Test
+        shell: pwsh
+        run: ./scripts/test-local.ps1
 
-      - run: |
-          xmake f -a x64 -m release -p windows --target_type=${{ matrix.target_type }} -y
+      - name: Build
+        shell: pwsh
+        run: ./scripts/build-local.ps1
 
-      - run: |
-          xmake -w -y
+      - name: Stage package
+        shell: pwsh
+        run: |
+          $stage = 'build/package/rbank'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item -Path build/rbank/* -Destination $stage -Recurse -Force
+          $version = '${{ github.event.release.tag_name }}' -replace '^v', ''
+          $manifest = Get-Content -LiteralPath (Join-Path $stage 'manifest.json') -Raw | ConvertFrom-Json
+          $manifest.version = $version
+          [IO.File]::WriteAllText((Join-Path $stage 'manifest.json'), (ConvertTo-Json -InputObject $manifest -Depth 5))
+          Copy-Item CHANGELOG.md, LICENSE, README.md -Destination (Join-Path $stage '..') -Force
+
+      - name: Archive
+        shell: pwsh
+        run: Compress-Archive -Path build/package/* -DestinationPath rbank-windows-x64.zip -Force
 
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.event.repository.name }}-${{ github.sha }}-${{ matrix.target_type }}-windows-x64
-          path: |
-            bin/
+          name: rbank-windows-x64
+          path: rbank-windows-x64.zip
+          if-no-files-found: error
 
-  update-release-notes:
-    permissions:
-      contents: write
+  publish:
+    needs:
+      - build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - id: extract-release-notes
+      - id: notes
         uses: ffurrer2/extract-release-notes@v3
+        with:
+          changelog_file: CHANGELOG.md
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: rbank-windows-x64
+          path: dist
 
       - uses: softprops/action-gh-release@v3
         with:
           body: |
-            ${{ steps.extract-release-notes.outputs.release_notes }}
-
-  upload-to-release:
-    needs:
-      - build
-      - update-release-notes
-    permissions:
-      contents: write
-    strategy:
-      matrix:
-        target_type:
-          - server
-          - client
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: ${{ github.event.repository.name }}-${{ github.sha }}-${{ matrix.target_type }}-windows-x64
-          path: artifact
-
-      - run: |
-          cp CHANGELOG.md LICENSE README.md artifact/
-
-      - run: |
-          zip -r ../${{ github.event.repository.name }}-${{ matrix.target_type }}-windows-x64.zip *
-        working-directory: artifact
-
-      - uses: softprops/action-gh-release@v3
-        with:
+            ${{ steps.notes.outputs.release_notes }}
           files: |
-            ${{ github.event.repository.name }}-${{ matrix.target_type }}-windows-x64.zip
+            dist/rbank-windows-x64.zip

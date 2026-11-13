@@ -4,13 +4,14 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
-$msvc = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207'
-$sdkRoot = 'C:\Program Files (x86)\Windows Kits\10'
-$sdk = '10.0.26100.0'
-$clang = Join-Path $project '.tools/llvm/bin/clang-cl.exe'
-$deps = Join-Path $project 'build/deps'
 & (Join-Path $PSScriptRoot 'prepare-deps.ps1') -Check
-if (-not (Test-Path -LiteralPath $clang)) { throw "Compiler is missing: $clang. Run ./scripts/prepare-tools.ps1." }
+$tools = & (Join-Path $PSScriptRoot 'prepare-tools.ps1') -Check -PassThru
+$msvc = $tools.msvc
+$sdkRoot = $tools.sdk.root
+$sdk = $tools.sdk.version
+$clang = $tools.compiler
+$deps = Join-Path $project 'build/deps'
+if (-not $clang) { throw 'Compiler is missing. Run ./scripts/prepare-tools.ps1.' }
 $includeDirs = @(
     "$deps/levilamina/src",
     "$deps/levilamina/src-server",
